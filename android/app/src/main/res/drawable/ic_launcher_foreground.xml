@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Subtle orbital ring inside Android 66dp adaptive safe zone -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#52FFFFFF"
+        android:strokeWidth="1.8"
+        android:pathData="M54,39 A15,15 0 1,1 53.99,39 Z" />
+    <!-- Crisp 4-point ASTERIAL star -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,26 L59.8,48.2 L82,54 L59.8,59.8 L54,82 L48.2,59.8 L26,54 L48.2,48.2 Z" />
+</vector>

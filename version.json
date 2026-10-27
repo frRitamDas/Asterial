@@ -1,0 +1,21 @@
+{
+  "name": "ASTERIAL",
+  "version": "1.2.0",
+  "displayVersion": "1.2",
+  "versionCode": 12000,
+  "channel": "stable",
+  "developer": "Ritam Das",
+  "attribution": "By X Huracan",
+  "androidPackageId": "com.xhuracan.asterial",
+  "productionUrl": "https://asterial.vercel.app",
+  "githubRepo": "frRitamDas/Asterial",
+  "releaseDate": "October 2026",
+  "releaseNotes": [
+    "Official Capacitor Android application (com.xhuracan.asterial) sharing the live ASTERIAL account & conversation workspace",
+    "Automated GitHub Actions Android APK build, verification, and release artifact pipeline",
+    "In-app version & update checker with semantic version comparison and official GitHub Release verification",
+    "Refined design system introducing the balanced Alabaster light theme alongside Obsidian, OLED Pitch, and Graphite",
+    "Native Android hardware back navigation, deep-link routing, status bar sync, and offline recovery shell",
+    "Safe-area, dynamic keyboard viewport, and touch-target optimizations for compact and large Android displays"
+  ]
+}

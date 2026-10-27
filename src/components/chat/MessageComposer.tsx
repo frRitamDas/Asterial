@@ -279,7 +279,7 @@ export function MessageComposer({
   }
 
   return (
-    <div className="relative border-t border-[var(--border-subtle)] bg-[var(--bg-void)] px-3 py-3 sm:px-5">
+    <div className="relative border-t border-[var(--border-subtle)] bg-[var(--bg-void)] px-3 pt-3 pb-3 pb-safe sm:px-5">
       {/* Error Banner */}
       {composerError && (
         <div className="mb-2 flex items-center justify-between gap-2 rounded-xl border border-red-500/35 bg-red-500/10 px-3 py-2 text-xs text-red-300">

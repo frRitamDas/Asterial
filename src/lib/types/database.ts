@@ -1,6 +1,6 @@
 export type PresenceVisibility = "everyone" | "contacts" | "nobody";
 export type AllowDirectMessages = "everyone" | "none";
-export type AppearanceTheme = "obsidian" | "pitch" | "graphite";
+export type AppearanceTheme = "obsidian" | "pitch" | "graphite" | "alabaster";
 export type MessageDensity = "compact" | "comfortable";
 export type ConversationType = "direct" | "group";
 export type MemberRole = "owner" | "admin" | "member";

@@ -205,7 +205,7 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
       {!isActiveChatThread && (
         <nav
           aria-label="Mobile navigation"
-          className="flex md:hidden items-center justify-around border-t border-[var(--border-subtle)] bg-[var(--bg-void)] px-2 py-1.5"
+          className="flex md:hidden items-center justify-around border-t border-[var(--border-subtle)] bg-[var(--bg-void)] px-2 pt-1.5 pb-1.5 pb-safe"
         >
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
@@ -219,7 +219,7 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "relative flex flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 text-[10px] font-medium transition-colors",
+                  "relative flex min-h-[44px] min-w-[56px] flex-col items-center justify-center gap-0.5 rounded-xl px-2.5 py-1 text-[10px] font-medium transition-colors",
                   active ? "text-white" : "text-zinc-500 hover:text-zinc-300"
                 )}
               >

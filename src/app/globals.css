@@ -3,59 +3,133 @@
 :root,
 [data-theme="obsidian"] {
   --bg-void: #050507;
-  --bg-canvas: #0a0a0d;
-  --bg-surface: #101014;
-  --bg-elevated: #16161c;
-  --bg-subtle: #1e1e26;
+  --bg-canvas: #09090c;
+  --bg-surface: #101015;
+  --bg-elevated: #16161d;
+  --bg-subtle: #1e1e27;
   --border-subtle: rgba(255, 255, 255, 0.08);
   --border-strong: rgba(255, 255, 255, 0.16);
-  --border-active: rgba(255, 255, 255, 0.34);
-  --text-primary: #f7f7f9;
-  --text-secondary: #9c9ca8;
-  --text-muted: #62626e;
-  --bubble-out-bg: #f5f5f7;
-  --bubble-out-fg: #09090b;
-  --bubble-in-bg: #141419;
-  --bubble-in-fg: #f3f3f6;
-  --focus-ring: rgba(255, 255, 255, 0.45);
+  --border-active: rgba(255, 255, 255, 0.36);
+  --text-primary: #f7f7fa;
+  --text-secondary: #a0a0ae;
+  --text-muted: #666675;
+  --accent-signal: #cbd5e1;
+  --accent-signal-subtle: rgba(203, 213, 225, 0.1);
+  --bubble-out-bg: #f5f5f8;
+  --bubble-out-fg: #09090c;
+  --bubble-in-bg: #14141b;
+  --bubble-in-fg: #f3f3f7;
+  --focus-ring: rgba(226, 232, 240, 0.5);
+  --shadow-surface: 0 12px 32px -12px rgba(0, 0, 0, 0.65);
+  --status-bar-hex: #050507;
 }
 
 [data-theme="pitch"] {
   --bg-void: #000000;
   --bg-canvas: #000000;
-  --bg-surface: #070709;
-  --bg-elevated: #0f0f13;
-  --bg-subtle: #17171d;
+  --bg-surface: #07070a;
+  --bg-elevated: #0f0f14;
+  --bg-subtle: #17171f;
   --border-subtle: rgba(255, 255, 255, 0.09);
   --border-strong: rgba(255, 255, 255, 0.18);
-  --border-active: rgba(255, 255, 255, 0.4);
+  --border-active: rgba(255, 255, 255, 0.42);
   --text-primary: #ffffff;
-  --text-secondary: #a1a1ad;
-  --text-muted: #666672;
+  --text-secondary: #a3a3b1;
+  --text-muted: #686876;
+  --accent-signal: #e2e8f0;
+  --accent-signal-subtle: rgba(226, 232, 240, 0.12);
   --bubble-out-bg: #ffffff;
   --bubble-out-fg: #050507;
-  --bubble-in-bg: #0d0d11;
-  --bubble-in-fg: #f7f7f9;
+  --bubble-in-bg: #0d0d12;
+  --bubble-in-fg: #f7f7fa;
   --focus-ring: rgba(255, 255, 255, 0.55);
+  --shadow-surface: 0 14px 36px -12px rgba(0, 0, 0, 0.85);
+  --status-bar-hex: #000000;
 }
 
 [data-theme="graphite"] {
-  --bg-void: #0c0c10;
-  --bg-canvas: #111116;
-  --bg-surface: #17171e;
-  --bg-elevated: #1f1f28;
-  --bg-subtle: #282834;
+  --bg-void: #0c0c11;
+  --bg-canvas: #111117;
+  --bg-surface: #17171f;
+  --bg-elevated: #1f1f29;
+  --bg-subtle: #282835;
   --border-subtle: rgba(255, 255, 255, 0.1);
   --border-strong: rgba(255, 255, 255, 0.2);
   --border-active: rgba(255, 255, 255, 0.42);
   --text-primary: #fafafa;
-  --text-secondary: #ababba;
-  --text-muted: #737384;
-  --bubble-out-bg: #f4f4f6;
-  --bubble-out-fg: #0b0b0e;
-  --bubble-in-bg: #1e1e27;
-  --bubble-in-fg: #f4f4f7;
-  --focus-ring: rgba(255, 255, 255, 0.5);
+  --text-secondary: #adadc0;
+  --text-muted: #76768a;
+  --accent-signal: #cbd5e1;
+  --accent-signal-subtle: rgba(203, 213, 225, 0.12);
+  --bubble-out-bg: #f4f4f7;
+  --bubble-out-fg: #0b0b0f;
+  --bubble-in-bg: #1e1e28;
+  --bubble-in-fg: #f4f4f8;
+  --focus-ring: rgba(226, 232, 240, 0.5);
+  --shadow-surface: 0 12px 30px -12px rgba(0, 0, 0, 0.55);
+  --status-bar-hex: #0c0c11;
+}
+
+[data-theme="alabaster"] {
+  color-scheme: light;
+  --bg-void: #f1f2f6;
+  --bg-canvas: #f8f9fb;
+  --bg-surface: #ffffff;
+  --bg-elevated: #ffffff;
+  --bg-subtle: #e9ebf1;
+  --border-subtle: rgba(15, 17, 26, 0.09);
+  --border-strong: rgba(15, 17, 26, 0.17);
+  --border-active: rgba(15, 17, 26, 0.42);
+  --text-primary: #0b0c10;
+  --text-secondary: #4b4e5d;
+  --text-muted: #6e7285;
+  --accent-signal: #1e293b;
+  --accent-signal-subtle: rgba(15, 23, 42, 0.07);
+  --bubble-out-bg: #0f1117;
+  --bubble-out-fg: #ffffff;
+  --bubble-in-bg: #eef0f5;
+  --bubble-in-fg: #0f1117;
+  --focus-ring: rgba(15, 23, 42, 0.35);
+  --shadow-surface: 0 12px 28px -12px rgba(15, 23, 42, 0.12);
+  --status-bar-hex: #f1f2f6;
+}
+
+/* Balanced light-theme semantic remapping for monochrome utility classes */
+[data-theme="alabaster"] .text-white {
+  color: #0b0c10;
+}
+
+[data-theme="alabaster"] .bg-white.text-zinc-950,
+[data-theme="alabaster"] .bg-white.text-black {
+  background-color: #0f1117;
+  color: #ffffff;
+}
+
+[data-theme="alabaster"] .bg-white.text-zinc-950:hover,
+[data-theme="alabaster"] .bg-white.text-black:hover {
+  background-color: #232634;
+}
+
+[data-theme="alabaster"] .text-zinc-200,
+[data-theme="alabaster"] .text-zinc-300 {
+  color: #272935;
+}
+
+[data-theme="alabaster"] .text-zinc-400 {
+  color: #4f5366;
+}
+
+[data-theme="alabaster"] .text-zinc-500,
+[data-theme="alabaster"] .text-zinc-600 {
+  color: #6d7285;
+}
+
+[data-theme="alabaster"] [class*="border-white/"] {
+  border-color: rgba(15, 17, 26, 0.11);
+}
+
+[data-theme="alabaster"] [class*="bg-white/["] {
+  background-color: rgba(15, 17, 26, 0.045);
 }
 
 :root,
@@ -84,11 +158,27 @@ body {
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: clip;
+  -webkit-tap-highlight-color: transparent;
 }
 
 ::selection {
-  background-color: rgba(255, 255, 255, 0.22);
-  color: #ffffff;
+  background-color: rgba(148, 163, 184, 0.28);
+  color: var(--text-primary);
+}
+
+/* Safe-area utilities for Android gesture bars, camera cutouts, and notched displays */
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.px-safe {
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
 }
 
 /* Precision minimal scrollbars */
@@ -102,12 +192,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(148, 163, 184, 0.2);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.24);
+  background: rgba(148, 163, 184, 0.35);
 }
 
 /* Accessible focus ring */
@@ -119,10 +209,16 @@ body {
 /* Subtle constellation grid motif */
 .asterial-grid-bg {
   background-image: radial-gradient(
-    rgba(255, 255, 255, 0.08) 1px,
+    rgba(148, 163, 184, 0.14) 1px,
     transparent 1px
   );
   background-size: 28px 28px;
+}
+
+.asterial-surface-card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-surface);
 }
 
 @keyframes asterialFadeIn {
