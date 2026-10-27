@@ -36,3 +36,18 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# android gradle caches, local SDK paths & NEVER-commit signing keys/APKs
+android/.gradle/
+android/captures/
+android/local.properties
+android/**/build/
+android/app/release/
+android/app/debug/
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+*.apk
+*.aab
+*.idsig

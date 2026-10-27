@@ -9,9 +9,12 @@ import {
   Loader2,
   MessageSquare,
   Search,
+  Share2,
   UserCheck,
 } from "lucide-react";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
+import { useNativePlatform } from "@/components/native/NativeBridge";
+import { useToast } from "@/components/ui/Toast";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
@@ -19,11 +22,15 @@ import { Input } from "@/components/ui/Input";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { primeAvatarSignedUrls } from "@/lib/supabase/storage";
 import { formatLastSeen } from "@/lib/utils/format";
+import { ASTERIAL_BRAND } from "@/lib/constants/brand";
 import type { UserSearchResult } from "@/lib/types/database";
 
 export default function ContactsPage() {
   const router = useRouter();
+  const { pushToast } = useToast();
+  const { shareContent } = useNativePlatform();
   const {
+    profile,
     conversations,
     onlineUserIds,
     startDirectConversation,
@@ -99,6 +106,27 @@ export default function ContactsPage() {
               exposing private emails.
             </p>
           </div>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={async () => {
+              const handleNote = profile?.username ? ` (@${profile.username})` : "";
+              const shared = await shareContent({
+                title: `Join me on ${ASTERIAL_BRAND.name}`,
+                text: `Connect with me${handleNote} on ${ASTERIAL_BRAND.name} — real-time messaging on Web & Android.`,
+                url: ASTERIAL_BRAND.productionUrl,
+              });
+              if (shared) {
+                pushToast({
+                  title: "Invite link ready to share",
+                  variant: "success",
+                });
+              }
+            }}
+          >
+            <Share2 className="h-3.5 w-3.5" />
+            Invite to ASTERIAL
+          </Button>
         </div>
 
         {/* Search Input */}

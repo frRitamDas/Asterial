@@ -1,24 +1,26 @@
+import versionManifest from "../../../version.json";
+
 export const ASTERIAL_BRAND = {
-  name: "ASTERIAL",
-  version: "1.1",
-  semver: "1.1.0",
-  developer: "Ritam Das",
-  attribution: "By X Huracan",
+  name: versionManifest.name,
+  version: versionManifest.displayVersion,
+  semver: versionManifest.version,
+  versionCode: versionManifest.versionCode,
+  channel: versionManifest.channel,
+  developer: versionManifest.developer,
+  attribution: versionManifest.attribution,
+  androidPackageId: versionManifest.androidPackageId,
+  productionUrl: versionManifest.productionUrl,
+  githubRepo: versionManifest.githubRepo,
+  githubReleasesUrl: `https://github.com/${versionManifest.githubRepo}/releases`,
+  githubActionsUrl: `https://github.com/${versionManifest.githubRepo}/actions`,
   tagline: "Precision real-time communication across your digital constellation.",
   emptyStateTitle: "Your space starts here.",
   emptyStateBody:
     "Find someone, start a conversation, and bring your world together.",
-  releaseDate: "October 2026",
-  releaseNotes: [
-    "Real-time 1:1 and group messaging powered by Supabase Realtime & PostgreSQL 17",
-    "Monochrome constellation design system with Obsidian, OLED Pitch, and Graphite surfaces",
-    "Authentic delivery and read receipts with per-account privacy controls",
-    "Private media attachments with magic-byte verification and scoped signed URLs",
-    "Role-based group administration (Owner, Admin, Member) enforced via Row Level Security",
-    "Live presence and ephemeral typing broadcasts with automatic disconnect cleanup",
-  ],
+  releaseDate: versionManifest.releaseDate,
+  releaseNotes: versionManifest.releaseNotes,
   securityNotice:
-    "Messages and attachments in ASTERIAL v1.1 are protected in transit via TLS and at rest by Supabase PostgreSQL Row Level Security and private storage policies. End-to-end cryptographic message encryption is not yet enabled in v1.1.",
+    "Messages and attachments in ASTERIAL are protected in transit via TLS and at rest by Supabase PostgreSQL Row Level Security and private storage policies. Client-side end-to-end cryptographic message encryption is not enabled in this release.",
 } as const;
 
 export const ALLOWED_ATTACHMENT_MIMES = [

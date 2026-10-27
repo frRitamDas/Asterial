@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
 import { AsterialLogo } from "@/components/brand/AsterialLogo";
+import { AppUpdatePanel } from "@/components/native/AppUpdatePanel";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
@@ -57,7 +58,7 @@ const SECTIONS: Array<{
   { id: "privacy", label: "Privacy", icon: Shield },
   { id: "blocked", label: "Blocked Users", icon: UserCheck },
   { id: "data", label: "Sessions & Data", icon: Monitor },
-  { id: "about", label: "About ASTERIAL", icon: Info },
+  { id: "about", label: "Updates & About", icon: Info },
 ];
 
 export default function SettingsPage() {
@@ -428,7 +429,7 @@ export default function SettingsPage() {
                   <label className="text-xs font-medium text-zinc-300">
                     Surface Theme
                   </label>
-                  <div className="grid gap-2.5 sm:grid-cols-3">
+                  <div className="grid gap-2.5 sm:grid-cols-2">
                     {(
                       [
                         [
@@ -445,6 +446,11 @@ export default function SettingsPage() {
                           "graphite",
                           "Graphite",
                           "Softened neutral charcoal tones",
+                        ],
+                        [
+                          "alabaster",
+                          "Alabaster Light",
+                          "Crisp daylight neutral surfaces",
                         ],
                       ] as Array<[AppearanceTheme, string, string]>
                     ).map(([themeId, title, desc]) => {
@@ -830,7 +836,7 @@ export default function SettingsPage() {
                   <div className="rounded-xl border border-white/[0.08] bg-[var(--bg-canvas)] p-3.5">
                     <p className="text-zinc-500">Release</p>
                     <p className="mt-1 font-mono font-semibold text-white">
-                      Version {ASTERIAL_BRAND.version}
+                      v{ASTERIAL_BRAND.semver} (Code {ASTERIAL_BRAND.versionCode})
                     </p>
                   </div>
                   <div className="rounded-xl border border-white/[0.08] bg-[var(--bg-canvas)] p-3.5">
@@ -841,9 +847,12 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
+                {/* Live Android & Release Update Checker */}
+                <AppUpdatePanel />
+
                 <div className="space-y-2">
                   <h3 className="font-mono text-[11px] uppercase tracking-widest text-zinc-400">
-                    Version {ASTERIAL_BRAND.version} Release Highlights
+                    Version {ASTERIAL_BRAND.semver} Release Highlights
                   </h3>
                   <ul className="space-y-1.5 text-xs text-zinc-300 list-disc pl-4">
                     {ASTERIAL_BRAND.releaseNotes.map((note) => (
@@ -859,7 +868,10 @@ export default function SettingsPage() {
                   <p>{ASTERIAL_BRAND.securityNotice}</p>
                 </div>
 
-                <div className="flex items-center gap-4 text-xs text-zinc-400">
+                <div className="flex flex-wrap items-center gap-4 text-xs text-zinc-400">
+                  <Link href="/download" className="hover:text-white underline">
+                    Android App &amp; APK Guide
+                  </Link>
                   <Link href="/privacy" className="hover:text-white underline">
                     Privacy Policy
                   </Link>

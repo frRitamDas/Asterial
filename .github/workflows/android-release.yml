@@ -1,0 +1,293 @@
+name: ASTERIAL Web & Android Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: "Publish GitHub Release for current version.json if tag does not yet exist"
+        required: false
+        default: false
+        type: boolean
+      server_url:
+        description: "HTTPS production origin loaded by the Android shell"
+        required: false
+        default: "https://asterial.vercel.app"
+        type: string
+
+concurrency:
+  group: asterial-android-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: write
+
+jobs:
+  verify-and-build-apk:
+    name: Verify Web & Build Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Verify centralized version alignment
+        run: npm run version:check
+
+      - name: Run strict TypeScript check
+        run: npm run typecheck
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Build Next.js web application
+        env:
+          NEXT_PUBLIC_GIT_SHA: ${{ github.sha }}
+          NEXT_PUBLIC_APP_URL: "https://asterial.vercel.app"
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || vars.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || vars.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'ci-build-verification-public-anon-placeholder-token' }}
+        run: npm run build
+
+      - name: Resolve release metadata & monotonic versionCode
+        id: meta
+        run: |
+          VERSION=$(node -p "require('./version.json').version")
+          BASE_CODE=$(node -p "require('./version.json').versionCode")
+          PACKAGE_ID=$(node -p "require('./version.json').androidPackageId")
+          RUN_OFFSET=${GITHUB_RUN_NUMBER:-0}
+          VERSION_CODE=$((BASE_CODE + RUN_OFFSET))
+          APK_FILENAME="asterial-android-${VERSION}.apk"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "base_code=${BASE_CODE}" >> "$GITHUB_OUTPUT"
+          echo "version_code=${VERSION_CODE}" >> "$GITHUB_OUTPUT"
+          echo "package_id=${PACKAGE_ID}" >> "$GITHUB_OUTPUT"
+          echo "apk_filename=${APK_FILENAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Sync Capacitor Android project
+        env:
+          CAPACITOR_SERVER_URL: ${{ inputs.server_url || 'https://asterial.vercel.app' }}
+        run: npm run cap:sync
+
+      - name: Setup JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+          cache: "gradle"
+
+      - name: Setup Android SDK (API 36)
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK Platform 36 & Build-Tools 36.0.0
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Configure signing mode (secret-free & PR-safe)
+        id: signing
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          KEYSTORE_B64: ${{ github.event_name != 'pull_request' && secrets.ANDROID_KEYSTORE_BASE64 || '' }}
+          KEYSTORE_PASS: ${{ github.event_name != 'pull_request' && secrets.ANDROID_KEYSTORE_PASSWORD || '' }}
+          KEY_ALIAS_VAL: ${{ github.event_name != 'pull_request' && secrets.ANDROID_KEY_ALIAS || '' }}
+          KEY_PASS_VAL: ${{ github.event_name != 'pull_request' && secrets.ANDROID_KEY_PASSWORD || '' }}
+        run: |
+          if [ "$EVENT_NAME" != "pull_request" ] && [ -n "$KEYSTORE_B64" ] && [ -n "$KEYSTORE_PASS" ] && [ -n "$KEY_ALIAS_VAL" ] && [ -n "$KEY_PASS_VAL" ]; then
+            KEYSTORE_FILE="${RUNNER_TEMP}/asterial-release.jks"
+            printf '%s' "$KEYSTORE_B64" | tr -d ' \n\r\t' | base64 -d > "$KEYSTORE_FILE"
+            chmod 600 "$KEYSTORE_FILE"
+            echo "keystore_path=${KEYSTORE_FILE}" >> "$GITHUB_OUTPUT"
+            echo "gradle_task=assembleRelease" >> "$GITHUB_OUTPUT"
+            echo "build_type=release" >> "$GITHUB_OUTPUT"
+            echo "signing_status=Production keystore signed (V1/V2/V3)" >> "$GITHUB_OUTPUT"
+            echo "is_production_signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "keystore_path=" >> "$GITHUB_OUTPUT"
+            echo "gradle_task=assembleDebug" >> "$GITHUB_OUTPUT"
+            echo "build_type=debug" >> "$GITHUB_OUTPUT"
+            if [ "$EVENT_NAME" = "pull_request" ]; then
+              echo "signing_status=Debug-signed PR verification APK (signing secrets isolated on PRs)" >> "$GITHUB_OUTPUT"
+            else
+              echo "signing_status=Debug-signed installable APK (ANDROID_KEYSTORE_* secrets not configured)" >> "$GITHUB_OUTPUT"
+            fi
+            echo "is_production_signed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build Android APK via Gradle
+        working-directory: android
+        env:
+          ASTERIAL_VERSION_NAME: ${{ steps.meta.outputs.version }}
+          ASTERIAL_VERSION_CODE: ${{ steps.meta.outputs.version_code }}
+          ANDROID_KEYSTORE_PATH: ${{ steps.signing.outputs.keystore_path }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ github.event_name != 'pull_request' && secrets.ANDROID_KEYSTORE_PASSWORD || '' }}
+          ANDROID_KEY_ALIAS: ${{ github.event_name != 'pull_request' && secrets.ANDROID_KEY_ALIAS || '' }}
+          ANDROID_KEY_PASSWORD: ${{ github.event_name != 'pull_request' && secrets.ANDROID_KEY_PASSWORD || '' }}
+        run: |
+          chmod +x ./gradlew
+          ./gradlew ${{ steps.signing.outputs.gradle_task }} --no-daemon --stacktrace
+
+      - name: Verify APK signature & stage release artifacts
+        id: package
+        run: |
+          mkdir -p dist-android
+          if [ "${{ steps.signing.outputs.build_type }}" = "release" ]; then
+            RAW_APK="android/app/build/outputs/apk/release/app-release.apk"
+          else
+            RAW_APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          fi
+
+          if [ ! -f "$RAW_APK" ]; then
+            echo "Expected APK not found at $RAW_APK"
+            find android/app/build/outputs/apk -type f || true
+            exit 1
+          fi
+
+          DEST_APK="dist-android/${{ steps.meta.outputs.apk_filename }}"
+          cp "$RAW_APK" "$DEST_APK"
+
+          APKSIGNER="${ANDROID_HOME}/build-tools/36.0.0/apksigner"
+          "$APKSIGNER" verify --verbose "$DEST_APK"
+
+          (cd dist-android && sha256sum "${{ steps.meta.outputs.apk_filename }}" > "${{ steps.meta.outputs.apk_filename }}.sha256")
+          SHA256_VAL=$(awk '{print $1}' "dist-android/${{ steps.meta.outputs.apk_filename }}.sha256")
+          APK_BYTES=$(wc -c < "$DEST_APK" | tr -d ' ')
+          echo "sha256=${SHA256_VAL}" >> "$GITHUB_OUTPUT"
+          echo "size_bytes=${APK_BYTES}" >> "$GITHUB_OUTPUT"
+
+          SHA256="$SHA256_VAL" SIZE_BYTES="$APK_BYTES" node -e '
+            const fs = require("fs");
+            const v = require("./version.json");
+            const manifest = {
+              product: v.name,
+              version: process.env.VERSION,
+              versionCode: Number(process.env.VERSION_CODE),
+              packageId: v.androidPackageId,
+              buildType: process.env.BUILD_TYPE,
+              productionSigned: process.env.PROD_SIGNED === "true",
+              signingStatus: process.env.SIGNING_STATUS,
+              apkFilename: process.env.APK_FILENAME,
+              sha256: process.env.SHA256,
+              sizeBytes: Number(process.env.SIZE_BYTES),
+              commitSha: process.env.GITHUB_SHA,
+              builtAt: new Date().toISOString(),
+              developer: v.developer,
+              attribution: v.attribution
+            };
+            fs.writeFileSync(
+              `dist-android/asterial-android-${process.env.VERSION}.manifest.json`,
+              JSON.stringify(manifest, null, 2) + "\n"
+            );
+          '
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          VERSION_CODE: ${{ steps.meta.outputs.version_code }}
+          BUILD_TYPE: ${{ steps.signing.outputs.build_type }}
+          PROD_SIGNED: ${{ steps.signing.outputs.is_production_signed }}
+          SIGNING_STATUS: ${{ steps.signing.outputs.signing_status }}
+          APK_FILENAME: ${{ steps.meta.outputs.apk_filename }}
+
+      - name: Upload APK build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: asterial-android-${{ steps.meta.outputs.version }}
+          path: |
+            dist-android/${{ steps.meta.outputs.apk_filename }}
+            dist-android/${{ steps.meta.outputs.apk_filename }}.sha256
+            dist-android/asterial-android-${{ steps.meta.outputs.version }}.manifest.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish GitHub Release (non-clobbering)
+        if: >-
+          github.event_name != 'pull_request' &&
+          (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') || inputs.publish_release == true)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: v${{ steps.meta.outputs.version }}
+          VERSION_CODE: ${{ steps.meta.outputs.version_code }}
+          BUILD_TYPE: ${{ steps.signing.outputs.build_type }}
+          SIGNING_STATUS: ${{ steps.signing.outputs.signing_status }}
+          APK_SHA256: ${{ steps.package.outputs.sha256 }}
+        run: |
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            echo "GitHub Release $TAG_NAME already exists — skipping overwrite to protect existing release assets."
+            echo "release_url=https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG_NAME}" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          NOTES_FILE="${RUNNER_TEMP}/release-notes.md"
+          NOTES_FILE="$NOTES_FILE" node -e '
+            const fs = require("fs");
+            const v = require("./version.json");
+            const lines = [
+              `## ${v.name} v${v.version} — Web & Android Release`,
+              "",
+              `- **Official Developer:** ${v.developer} (${v.attribution})`,
+              `- **Android Package ID:** \`${v.androidPackageId}\``,
+              `- **Android Version Code:** \`${process.env.VERSION_CODE}\``,
+              `- **Build Type:** \`${process.env.BUILD_TYPE}\``,
+              `- **Signing Status:** ${process.env.SIGNING_STATUS}`,
+              `- **Commit SHA:** \`${process.env.GITHUB_SHA}\``,
+              `- **APK SHA-256:** \`${process.env.APK_SHA256}\``,
+              `- **Production Web App:** ${v.productionUrl}`,
+              "",
+              "### Highlights",
+              ...v.releaseNotes.map((n) => `- ${n}`),
+            ];
+            fs.writeFileSync(process.env.NOTES_FILE, lines.join("\n") + "\n");
+          '
+
+          gh release create "$TAG_NAME" \
+            "dist-android/${{ steps.meta.outputs.apk_filename }}" \
+            "dist-android/${{ steps.meta.outputs.apk_filename }}.sha256" \
+            "dist-android/asterial-android-${{ steps.meta.outputs.version }}.manifest.json" \
+            --title "ASTERIAL v${{ steps.meta.outputs.version }}" \
+            --notes-file "$NOTES_FILE" \
+            --target "${GITHUB_SHA}"
+
+      - name: Write workflow build summary
+        if: always()
+        run: |
+          {
+            echo "## ASTERIAL Android & Web Build Summary"
+            echo ""
+            echo "| Property | Value |"
+            echo "| :--- | :--- |"
+            echo "| **Product** | ASTERIAL (Developer: Ritam Das · By X Huracan) |"
+            echo "| **App Version (\`versionName\`)** | \`${{ steps.meta.outputs.version }}\` |"
+            echo "| **Android \`versionCode\`** | \`${{ steps.meta.outputs.version_code }}\` |"
+            echo "| **Application ID** | \`${{ steps.meta.outputs.package_id }}\` |"
+            echo "| **Commit SHA** | \`${{ github.sha }}\` |"
+            echo "| **Trigger Event** | \`${{ github.event_name }}\` (\`${{ github.ref_name }}\`) |"
+            echo "| **Build Type** | \`${{ steps.signing.outputs.build_type }}\` |"
+            echo "| **APK Filename** | \`${{ steps.meta.outputs.apk_filename }}\` |"
+            echo "| **APK SHA-256** | \`${{ steps.package.outputs.sha256 || 'n/a' }}\` |"
+            echo "| **Signing Status** | ${{ steps.signing.outputs.signing_status }} |"
+            echo "| **Workflow Run** | [View Run & Artifact](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |"
+            echo "| **GitHub Releases** | [Releases](${{ github.server_url }}/${{ github.repository }}/releases) |"
+            echo "| **Production Website** | [https://asterial.vercel.app](https://asterial.vercel.app) |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Scrub temporary keystore from runner
+        if: always()
+        run: rm -f "${RUNNER_TEMP}/asterial-release.jks"

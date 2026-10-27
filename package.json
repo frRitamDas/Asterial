@@ -1,8 +1,8 @@
 {
   "name": "asterial",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
-  "description": "ASTERIAL v1.1 — Precision real-time messaging and communication platform. Official Developer: Ritam Das | By X Huracan.",
+  "description": "ASTERIAL v1.2 — Precision real-time messaging across Web & Android. Official Developer: Ritam Das | By X Huracan.",
   "author": "Ritam Das (By X Huracan)",
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0 --port 3000",
@@ -11,9 +11,20 @@
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test 'src/**/*.test.ts'",
-    "check": "npm run typecheck && npm run lint && npm run test"
+    "version:sync": "node scripts/sync-version.mjs",
+    "version:check": "node scripts/sync-version.mjs --check",
+    "cap:sync": "npx cap sync android",
+    "check": "npm run version:check && npm run typecheck && npm run lint && npm run test"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/browser": "^8.0.5",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/keyboard": "^8.0.6",
+    "@capacitor/network": "^8.0.1",
+    "@capacitor/share": "^8.0.3",
+    "@capacitor/status-bar": "^8.0.4",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.118.0",
     "clsx": "^2.1.1",
@@ -26,6 +37,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.4.3",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^22.19.1",
     "@types/react": "^19.2.14",

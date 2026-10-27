@@ -70,6 +70,9 @@ export default function HomePage() {
             <a href="#security" className="hover:text-white transition-colors">
               Security Model
             </a>
+            <Link href="/download" className="hover:text-white transition-colors">
+              Android App
+            </Link>
             <Link href="/privacy" className="hover:text-white transition-colors">
               Privacy
             </Link>
@@ -108,8 +111,14 @@ export default function HomePage() {
                 visual clutter.
               </p>
 
-              <div className="mt-9">
+              <div className="mt-9 flex flex-wrap items-center gap-3">
                 <HomeSessionActions />
+                <Link
+                  href="/download"
+                  className="inline-flex h-11 items-center gap-2 rounded-xl border border-white/15 bg-white/[0.04] px-4 text-xs font-medium text-zinc-200 hover:border-white/30 hover:bg-white/[0.08] transition-colors"
+                >
+                  <span>Android APK · v{ASTERIAL_BRAND.semver}</span>
+                </Link>
               </div>
 
               <div className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-2 font-mono text-xs text-zinc-500">
@@ -117,7 +126,9 @@ export default function HomePage() {
                 <span className="hidden sm:inline text-zinc-700">·</span>
                 <span>{ASTERIAL_BRAND.attribution}</span>
                 <span className="hidden sm:inline text-zinc-700">·</span>
-                <span>Web &amp; Installable PWA</span>
+                <Link href="/download" className="hover:text-zinc-300 underline decoration-white/20">
+                  Web, PWA &amp; Android APK
+                </Link>
               </div>
             </div>
 
@@ -300,6 +311,9 @@ export default function HomePage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-6 text-xs text-zinc-400">
+            <Link href="/download" className="hover:text-white transition-colors">
+              Android APK
+            </Link>
             <Link href="/login" className="hover:text-white transition-colors">
               Sign in
             </Link>

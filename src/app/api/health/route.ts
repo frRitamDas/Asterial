@@ -7,6 +7,13 @@ export async function GET() {
       status: "ok",
       product: ASTERIAL_BRAND.name,
       version: ASTERIAL_BRAND.version,
+      semver: ASTERIAL_BRAND.semver,
+      versionCode: ASTERIAL_BRAND.versionCode,
+      androidPackageId: ASTERIAL_BRAND.androidPackageId,
+      commitSha:
+        process.env.VERCEL_GIT_COMMIT_SHA ||
+        process.env.NEXT_PUBLIC_GIT_SHA ||
+        null,
       developer: ASTERIAL_BRAND.developer,
       attribution: ASTERIAL_BRAND.attribution,
       timestamp: new Date().toISOString(),
