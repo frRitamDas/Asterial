@@ -158,19 +158,20 @@ export default function DownloadPage() {
                 <div className="flex items-start gap-2.5">
                   <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400 mt-0.5" />
                   <p>
-                    <strong>Instant Web Interface Updates:</strong> Compatible
-                    UI refinements deployed to{" "}
-                    <code className="font-mono">asterial.vercel.app</code> take
-                    effect immediately inside the Capacitor HTTPS shell with
-                    strict origin locking and an offline recovery screen.
+                    <strong>Dedicated Native Frontend:</strong> Built with React
+                    Native + TypeScript and rendered via native Android Views
+                    (never a WebView or iframe wrapper), sharing{" "}
+                    <code className="font-mono">@asterial/core</code> validation
+                    and domain models with the Next.js web application.
                   </p>
                 </div>
                 <div className="flex items-start gap-2.5">
                   <Lock className="h-4 w-4 shrink-0 text-zinc-300 mt-0.5" />
                   <p>
-                    <strong>Verified Native Updates:</strong> Changes to native
-                    Android plugins, permissions, icons, or Gradle SDKs produce
-                    a new monotonically versioned APK via GitHub Actions.
+                    <strong>Automated APK Builds:</strong> Compiled via Gradle
+                    + Hermes in GitHub Actions with monotonic{" "}
+                    <code className="font-mono">versionCode</code> increments
+                    and SHA-256 checksums.
                   </p>
                 </div>
               </div>

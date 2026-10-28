@@ -1,9 +1,10 @@
-name: ASTERIAL Web & Android Release
+name: ASTERIAL Web & Native Android CI/Release
 
 on:
   push:
     branches:
       - main
+      - "arena/**"
     tags:
       - "v*"
   pull_request:
@@ -16,14 +17,9 @@ on:
         required: false
         default: false
         type: boolean
-      server_url:
-        description: "HTTPS production origin loaded by the Android shell"
-        required: false
-        default: "https://asterial.vercel.app"
-        type: string
 
 concurrency:
-  group: asterial-android-${{ github.workflow }}-${{ github.ref }}
+  group: asterial-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -31,9 +27,9 @@ permissions:
 
 jobs:
   verify-and-build-apk:
-    name: Verify Web & Build Android APK
+    name: Verify Core, Web & Native Android APK
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Checkout repository
@@ -44,21 +40,39 @@ jobs:
         with:
           node-version: "22"
           cache: "npm"
+          cache-dependency-path: |
+            package-lock.json
+            mobile/package-lock.json
 
-      - name: Install npm dependencies
+      - name: Install root & shared core dependencies
         run: npm ci
 
-      - name: Verify centralized version alignment
+      - name: Install React Native mobile dependencies
+        env:
+          NEXT_PUBLIC_APP_URL: "https://asterial.vercel.app"
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || vars.NEXT_PUBLIC_SUPABASE_URL || '' }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || vars.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' }}
+        run: |
+          npm --prefix mobile ci
+          npm run mobile:env
+
+      - name: Verify centralized version alignment (web, @asterial/core, mobile)
         run: npm run version:check
 
-      - name: Run strict TypeScript check
+      - name: Run strict TypeScript check (web + @asterial/core)
         run: npm run typecheck
 
-      - name: Run ESLint
+      - name: Run strict TypeScript check (React Native mobile + @asterial/core)
+        run: npm run mobile:typecheck
+
+      - name: Run ESLint (web, @asterial/core, mobile)
         run: npm run lint
 
-      - name: Run unit tests
+      - name: Run unit tests (web + @asterial/core)
         run: npm test
+
+      - name: Run unit tests (React Native mobile)
+        run: npm run mobile:test
 
       - name: Build Next.js web application
         env:
@@ -83,19 +97,14 @@ jobs:
           echo "package_id=${PACKAGE_ID}" >> "$GITHUB_OUTPUT"
           echo "apk_filename=${APK_FILENAME}" >> "$GITHUB_OUTPUT"
 
-      - name: Sync Capacitor Android project
-        env:
-          CAPACITOR_SERVER_URL: ${{ inputs.server_url || 'https://asterial.vercel.app' }}
-        run: npm run cap:sync
-
-      - name: Setup JDK 21 (Temurin)
+      - name: Setup JDK 17 (Temurin — React Native 0.83 Kotlin JVM Toolchain)
         uses: actions/setup-java@v6
         with:
           distribution: "temurin"
-          java-version: "21"
+          java-version: "17"
           cache: "gradle"
 
-      - name: Provision Android SDK Platform 36 & Build-Tools 36.0.0
+      - name: Provision Android SDK 36, Build-Tools 36.0.0, NDK 27.1.12297006 & CMake 3.22.1
         run: |
           SDK_DIR="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
           if [ ! -d "$SDK_DIR" ] || [ ! -w "$SDK_DIR" ]; then
@@ -125,11 +134,16 @@ jobs:
           fi
 
           yes | "$SDKMANAGER" --sdk_root="$SDK_DIR" --licenses > /dev/null || true
-          "$SDKMANAGER" --sdk_root="$SDK_DIR" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+          "$SDKMANAGER" --sdk_root="$SDK_DIR" \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "ndk;27.1.12297006" \
+            "cmake;3.22.1"
 
           echo "ANDROID_HOME=${SDK_DIR}" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=${SDK_DIR}" >> "$GITHUB_ENV"
-          echo "sdk.dir=${SDK_DIR}" > android/local.properties
+          echo "sdk.dir=${SDK_DIR}" > mobile/android/local.properties
 
       - name: Configure signing mode (secret-free & PR-safe)
         id: signing
@@ -161,9 +175,10 @@ jobs:
             echo "is_production_signed=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Build Android APK via Gradle
-        working-directory: android
+      - name: Build Native React Native Android APK via Gradle
+        working-directory: mobile/android
         env:
+          CI: "true"
           ASTERIAL_VERSION_NAME: ${{ steps.meta.outputs.version }}
           ASTERIAL_VERSION_CODE: ${{ steps.meta.outputs.version_code }}
           ANDROID_KEYSTORE_PATH: ${{ steps.signing.outputs.keystore_path }}
@@ -174,24 +189,30 @@ jobs:
           chmod +x ./gradlew
           ./gradlew ${{ steps.signing.outputs.gradle_task }} --no-daemon --stacktrace
 
-      - name: Verify APK signature & stage release artifacts
+      - name: Verify embedded React Native bundle, APK signature & stage artifacts
         id: package
         run: |
           mkdir -p dist-android
           if [ "${{ steps.signing.outputs.build_type }}" = "release" ]; then
-            RAW_APK="android/app/build/outputs/apk/release/app-release.apk"
+            RAW_APK="mobile/android/app/build/outputs/apk/release/app-release.apk"
           else
-            RAW_APK="android/app/build/outputs/apk/debug/app-debug.apk"
+            RAW_APK="mobile/android/app/build/outputs/apk/debug/app-debug.apk"
           fi
 
           if [ ! -f "$RAW_APK" ]; then
             echo "Expected APK not found at $RAW_APK"
-            find android/app/build/outputs/apk -type f || true
+            find mobile/android/app/build/outputs/apk -type f || true
             exit 1
           fi
 
           DEST_APK="dist-android/${{ steps.meta.outputs.apk_filename }}"
           cp "$RAW_APK" "$DEST_APK"
+
+          if ! unzip -l "$DEST_APK" | grep -q "assets/index.android.bundle"; then
+            echo "ERROR: Standalone React Native bundle (assets/index.android.bundle) missing from APK!"
+            exit 1
+          fi
+          echo "Verified standalone embedded React Native Hermes bundle inside APK."
 
           APKSIGNER="${ANDROID_SDK_ROOT}/build-tools/36.0.0/apksigner"
           "$APKSIGNER" verify --verbose "$DEST_APK"
@@ -207,6 +228,7 @@ jobs:
             const v = require("./version.json");
             const manifest = {
               product: v.name,
+              architecture: "react-native-0.83-fabric-hermes",
               version: process.env.VERSION,
               versionCode: Number(process.env.VERSION_CODE),
               packageId: v.androidPackageId,
@@ -268,9 +290,10 @@ jobs:
             const fs = require("fs");
             const v = require("./version.json");
             const lines = [
-              `## ${v.name} v${v.version} — Web & Android Release`,
+              `## ${v.name} v${v.version} — Web & Native Android Release`,
               "",
               `- **Official Developer:** ${v.developer} (${v.attribution})`,
+              `- **Android Architecture:** Dedicated React Native 0.83 (Fabric + Hermes, zero WebView)`,
               `- **Android Package ID:** \`${v.androidPackageId}\``,
               `- **Android Version Code:** \`${process.env.VERSION_CODE}\``,
               `- **Build Type:** \`${process.env.BUILD_TYPE}\``,
@@ -297,11 +320,12 @@ jobs:
         if: always()
         run: |
           {
-            echo "## ASTERIAL Android & Web Build Summary"
+            echo "## ASTERIAL Web & Native Android Build Summary"
             echo ""
             echo "| Property | Value |"
             echo "| :--- | :--- |"
             echo "| **Product** | ASTERIAL (Developer: Ritam Das · By X Huracan) |"
+            echo "| **Android Runtime** | React Native 0.83.10 (Fabric + Hermes, zero WebView) |"
             echo "| **App Version (\`versionName\`)** | \`${{ steps.meta.outputs.version }}\` |"
             echo "| **Android \`versionCode\`** | \`${{ steps.meta.outputs.version_code }}\` |"
             echo "| **Application ID** | \`${{ steps.meta.outputs.package_id }}\` |"

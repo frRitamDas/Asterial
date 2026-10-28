@@ -1,0 +1,93 @@
+import groovy.json.JsonSlurper
+
+apply plugin: "com.android.application"
+apply plugin: "org.jetbrains.kotlin.android"
+apply plugin: "com.facebook.react"
+
+def versionMetadataFile = rootProject.file("../../version.json")
+def versionMetadata = versionMetadataFile.exists()
+    ? new JsonSlurper().parseText(versionMetadataFile.text)
+    : [version: "1.2.0", versionCode: 12000]
+
+def resolvedVersionName = (System.getenv("ASTERIAL_VERSION_NAME") ?: versionMetadata.version).toString()
+def resolvedVersionCode = (System.getenv("ASTERIAL_VERSION_CODE") ?: versionMetadata.versionCode).toInteger()
+
+def keystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
+def keystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+def keyAliasValue = System.getenv("ANDROID_KEY_ALIAS")
+def keyPasswordValue = System.getenv("ANDROID_KEY_PASSWORD")
+def hasReleaseKeystore = (
+    keystorePath != null &&
+    !keystorePath.trim().isEmpty() &&
+    file(keystorePath).exists() &&
+    keystorePassword != null &&
+    !keystorePassword.isEmpty() &&
+    keyAliasValue != null &&
+    !keyAliasValue.isEmpty() &&
+    keyPasswordValue != null &&
+    !keyPasswordValue.isEmpty()
+)
+
+react {
+    // In CI verification builds, embed the compiled Hermes JS bundle in debug APKs as well
+    // so every CI-generated APK runs standalone on physical Android devices without Metro.
+    if (System.getenv("CI") == "true") {
+        debuggableVariants = []
+    }
+    autolinkLibrariesWithApp()
+}
+
+def enableProguardInReleaseBuilds = false
+def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
+
+android {
+    ndkVersion rootProject.ext.ndkVersion
+    buildToolsVersion rootProject.ext.buildToolsVersion
+    compileSdk rootProject.ext.compileSdkVersion
+
+    namespace "com.xhuracan.asterial"
+    defaultConfig {
+        applicationId "com.xhuracan.asterial"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode resolvedVersionCode
+        versionName resolvedVersionName
+    }
+
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            release {
+                storeFile file(keystorePath)
+                storePassword keystorePassword
+                keyAlias keyAliasValue
+                keyPassword keyPasswordValue
+                enableV1Signing true
+                enableV2Signing true
+                enableV3Signing true
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            versionNameSuffix "-debug"
+        }
+        release {
+            minifyEnabled enableProguardInReleaseBuilds
+            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+            if (hasReleaseKeystore) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+}
+
+dependencies {
+    implementation("com.facebook.react:react-android")
+
+    if (hermesEnabled.toBoolean()) {
+        implementation("com.facebook.react:hermes-android")
+    } else {
+        implementation jscFlavor
+    }
+}

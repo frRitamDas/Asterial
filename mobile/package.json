@@ -1,0 +1,40 @@
+{
+  "name": "asterial-mobile",
+  "version": "1.2.0",
+  "private": true,
+  "description": "ASTERIAL Native Android Application (React Native + TypeScript) — Official Developer: Ritam Das | By X Huracan.",
+  "scripts": {
+    "postinstall": "node ../scripts/prepare-mobile-env.mjs",
+    "android": "react-native run-android",
+    "start": "react-native start",
+    "typecheck": "tsc --noEmit",
+    "bundle:verify": "react-native bundle --platform android --dev false --entry-file index.js --bundle-output /tmp/asterial-verify.android.bundle",
+    "test": "npx --prefix .. tsx --test 'src/**/*.test.ts'"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "^2.2.0",
+    "@supabase/supabase-js": "^2.118.0",
+    "react": "19.2.0",
+    "react-native": "0.83.10",
+    "react-native-safe-area-context": "^5.5.2",
+    "react-native-url-polyfill": "^3.0.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.2",
+    "@babel/plugin-transform-export-namespace-from": "^7.25.9",
+    "@babel/preset-env": "^7.25.3",
+    "@babel/runtime": "^7.25.0",
+    "@react-native-community/cli": "^20.2.0",
+    "@react-native-community/cli-platform-android": "^20.2.0",
+    "@react-native/babel-preset": "0.83.10",
+    "@react-native/metro-config": "0.83.10",
+    "@react-native/typescript-config": "0.83.10",
+    "@types/node": "^22.19.1",
+    "@types/react": "^19.2.0",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
