@@ -35,7 +35,7 @@ const CAPABILITIES = [
   },
   {
     icon: LayoutList,
-    title: "Chronological Social Feed",
+    title: "A feed that feels yours",
     description:
       "Persistent text and photo posts with transactional likes, comments, audience visibility rules, and zero algorithmic ranking.",
   },
@@ -68,7 +68,7 @@ export default function HomePage() {
               Platform
             </a>
             <a href="#security" className="hover:text-white transition-colors">
-              Security &amp; Retention
+              Your privacy
             </a>
             <Link href="/download" className="hover:text-white transition-colors">
               Android App
@@ -100,15 +100,11 @@ export default function HomePage() {
               </div>
 
               <h1 className="mt-7 text-4xl font-semibold tracking-tight text-white sm:text-6xl sm:leading-[1.06]">
-                Messages, communities, and updates in calm monochrome.
+                Your conversations, without the noise.
               </h1>
 
               <p className="mt-6 max-w-2xl text-base text-zinc-400 leading-relaxed sm:text-lg">
-                {ASTERIAL_BRAND.name} brings real-time 1:1 &amp; group
-                messaging, role-governed Orbits, expiring Moments, and a
-                chronological Social Feed together across Web and native
-                Android — engineered for clarity, speed, and verifiable access
-                control.
+                One place for your chats, groups, Moments, and communities. A clean, familiar messaging experience that keeps the conversation at the centre — on web and Android.
               </p>
 
               <div className="mt-9 flex flex-wrap items-center gap-3">
@@ -170,8 +166,7 @@ export default function HomePage() {
                           {ASTERIAL_BRAND.emptyStateTitle}
                         </p>
                         <p className="text-[11px] text-zinc-500">
-                          Unified database &amp; Realtime sync across Web and
-                          Android
+                          Your chats, synced across devices
                         </p>
                       </div>
                     </div>
@@ -227,10 +222,10 @@ export default function HomePage() {
           <div className="mx-auto max-w-6xl px-6">
             <div className="max-w-2xl">
               <p className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-500">
-                Platform Architecture
+                A BETTER WAY TO STAY CONNECTED
               </p>
               <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-                Built from database policy to native surface.
+                Everything you need. Nothing in the way.
               </h2>
             </div>
 
