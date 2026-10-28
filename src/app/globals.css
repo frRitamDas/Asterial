@@ -329,3 +329,114 @@ input::placeholder, textarea::placeholder {
   html { scroll-behavior: auto; }
   .animate-asterial-rise { animation: none; }
 }
+
+
+/* ASTERIAL 1.4.3 — unified visual system */
+:root {
+  --asterial-ink: #08090d;
+  --asterial-panel: #0d1017;
+  --asterial-blue: #9edcff;
+  --asterial-indigo: #b7b7ff;
+  --asterial-motion: cubic-bezier(.2,.8,.2,1);
+}
+
+html {
+  scroll-padding-top: 88px;
+  scrollbar-color: #30333d #08090d;
+}
+
+body {
+  background: var(--asterial-ink);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  color: #07090d;
+  background: #a9dfff;
+}
+
+:focus-visible {
+  outline: 2px solid rgba(158, 220, 255, .85);
+  outline-offset: 3px;
+}
+
+.asterial-home {
+  isolation: isolate;
+}
+
+.asterial-hero-glow {
+  background:
+    radial-gradient(ellipse 48% 52% at 78% 36%, rgba(70, 99, 219, .16), transparent 72%),
+    radial-gradient(ellipse 40% 36% at 15% 8%, rgba(57, 163, 220, .09), transparent 70%),
+    linear-gradient(180deg, #090b12 0%, #07080b 82%);
+}
+
+.asterial-gradient-text {
+  background: linear-gradient(108deg, #f5f8ff 4%, #b7caff 39%, #92dfff 72%, #c3c3ff 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+.asterial-window {
+  transform: perspective(1200px) rotateY(-2deg) rotateX(1deg);
+  transform-origin: center;
+  transition: transform 500ms var(--asterial-motion), border-color 300ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .asterial-window:hover {
+    transform: perspective(1200px) rotateY(0deg) rotateX(0deg) translateY(-3px);
+    border-color: rgba(180, 210, 255, .22);
+  }
+}
+
+.asterial-feature-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(circle at 15% 0%, rgba(125, 190, 255, .10), transparent 60%);
+  transition: opacity 300ms ease;
+}
+
+.asterial-feature-card:hover::before {
+  opacity: 1;
+}
+
+.asterial-workspace {
+  background:
+    radial-gradient(ellipse at 85% 0%, rgba(58, 82, 160, .06), transparent 42%),
+    #08090d;
+}
+
+.asterial-workspace-main {
+  background:
+    radial-gradient(ellipse at 85% 0%, rgba(56, 91, 176, .045), transparent 45%),
+    #0b0c11;
+}
+
+.asterial-mobile-nav {
+  padding-bottom: max(.375rem, env(safe-area-inset-bottom));
+}
+
+.asterial-workspace aside,
+.asterial-workspace-main {
+  min-height: 0;
+}
+
+@media (max-width: 767px) {
+  .asterial-window {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .asterial-window,
+  .asterial-feature-card::before {
+    transition: none !important;
+  }
+}

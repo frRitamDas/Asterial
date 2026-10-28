@@ -29,12 +29,12 @@ import {
   type ConversationSummary,
 } from "./index";
 
-describe("@asterial/core shared cross-platform domain package (v1.4.2)", () => {
-  it("exposes shared v1.4.2 brand metadata, honest security notice, and monochrome palettes", () => {
+describe("@asterial/core shared cross-platform domain package (v1.4.3)", () => {
+  it("exposes shared v1.4.3 brand metadata, honest security notice, and monochrome palettes", () => {
     assert.equal(ASTERIAL_BRAND.name, "ASTERIAL");
-    assert.equal(ASTERIAL_BRAND.version, "1.4.2");
-    assert.equal(ASTERIAL_BRAND.semver, "1.4.2");
-    assert.equal(ASTERIAL_BRAND.versionCode, 14200);
+    assert.equal(ASTERIAL_BRAND.version, "1.4.3");
+    assert.equal(ASTERIAL_BRAND.semver, "1.4.3");
+    assert.equal(ASTERIAL_BRAND.versionCode, 14300);
     assert.equal(ASTERIAL_BRAND.developer, "Ritam Das");
     assert.equal(ASTERIAL_BRAND.attribution, "By X Huracan");
     assert.equal(ASTERIAL_BRAND.androidPackageId, "com.xhuracan.asterial");

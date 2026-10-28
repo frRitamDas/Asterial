@@ -15,8 +15,9 @@ import {
   Settings,
   UserCircle,
   WifiOff,
+  Plus,
 } from "lucide-react";
-import { AsterialMark } from "@/components/brand/AsterialLogo";
+import { AsterialLogo, AsterialMark } from "@/components/brand/AsterialLogo";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
 import { ConversationSidebar } from "@/components/workspace/ConversationSidebar";
 import { OnboardingModal } from "@/components/workspace/OnboardingModal";
@@ -27,104 +28,27 @@ import { cn } from "@/lib/utils/cn";
 import { ASTERIAL_BRAND } from "@/lib/constants/brand";
 
 const DESKTOP_NAV_ITEMS = [
-  {
-    href: "/app/chats",
-    matchPrefix: "/app/chats",
-    label: "Chats",
-    icon: MessageSquare,
-  },
-  {
-    href: "/app/groups",
-    matchPrefix: "/app/groups",
-    label: "Groups",
-    icon: Layers,
-  },
-  {
-    href: "/app/orbits",
-    matchPrefix: "/app/orbits",
-    label: "Orbits",
-    icon: Globe,
-  },
-  {
-    href: "/app/moments",
-    matchPrefix: "/app/moments",
-    label: "Moments",
-    icon: Aperture,
-  },
-  {
-    href: "/app/feed",
-    matchPrefix: "/app/feed",
-    label: "Feed",
-    icon: LayoutList,
-  },
-  {
-    href: "/app/contacts",
-    matchPrefix: "/app/contacts",
-    label: "People",
-    icon: Compass,
-  },
-  {
-    href: "/app/profile",
-    matchPrefix: "/app/profile",
-    label: "Profile",
-    icon: UserCircle,
-  },
-  {
-    href: "/app/settings",
-    matchPrefix: "/app/settings",
-    label: "Settings",
-    icon: Settings,
-  },
+  { href: "/app/chats", matchPrefix: "/app/chats", label: "Messages", icon: MessageSquare, group: "YOUR SPACE" },
+  { href: "/app/groups", matchPrefix: "/app/groups", label: "Groups", icon: Layers, group: "YOUR SPACE" },
+  { href: "/app/orbits", matchPrefix: "/app/orbits", label: "Orbits", icon: Globe, group: "DISCOVER" },
+  { href: "/app/moments", matchPrefix: "/app/moments", label: "Moments", icon: Aperture, group: "DISCOVER" },
+  { href: "/app/feed", matchPrefix: "/app/feed", label: "Feed", icon: LayoutList, group: "DISCOVER" },
+  { href: "/app/contacts", matchPrefix: "/app/contacts", label: "People", icon: Compass, group: "PERSONAL" },
+  { href: "/app/profile", matchPrefix: "/app/profile", label: "Profile", icon: UserCircle, group: "PERSONAL" },
+  { href: "/app/settings", matchPrefix: "/app/settings", label: "Settings", icon: Settings, group: "PERSONAL" },
 ] as const;
 
 const MOBILE_NAV_ITEMS = [
-  {
-    href: "/app/chats",
-    matchPrefix: "/app/chats",
-    label: "Chats",
-    icon: MessageSquare,
-  },
-  {
-    href: "/app/orbits",
-    matchPrefix: "/app/orbits",
-    label: "Orbits",
-    icon: Globe,
-  },
-  {
-    href: "/app/moments",
-    matchPrefix: "/app/moments",
-    label: "Moments",
-    icon: Aperture,
-  },
-  {
-    href: "/app/feed",
-    matchPrefix: "/app/feed",
-    label: "Feed",
-    icon: LayoutList,
-  },
-  {
-    href: "/app/contacts",
-    matchPrefix: "/app/contacts",
-    label: "People",
-    icon: Compass,
-  },
-  {
-    href: "/app/settings",
-    matchPrefix: "/app/settings",
-    label: "Settings",
-    icon: Settings,
-  },
+  { href: "/app/chats", matchPrefix: "/app/chats", label: "Chats", icon: MessageSquare },
+  { href: "/app/orbits", matchPrefix: "/app/orbits", label: "Orbits", icon: Globe },
+  { href: "/app/moments", matchPrefix: "/app/moments", label: "Moments", icon: Aperture },
+  { href: "/app/feed", matchPrefix: "/app/feed", label: "Feed", icon: LayoutList },
+  { href: "/app/contacts", matchPrefix: "/app/contacts", label: "People", icon: Compass },
 ] as const;
 
 export function WorkspaceShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const {
-    profile,
-    totalUnreadCount,
-    isNetworkOnline,
-    setActiveModal,
-    signOut,
-  } = useWorkspace();
+  const { profile, totalUnreadCount, isNetworkOnline, setActiveModal, signOut } = useWorkspace();
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -138,176 +62,106 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
   }, [setActiveModal]);
 
   const isChatsSection = pathname.startsWith("/app/chats");
-  const isActiveChatThread =
-    pathname.startsWith("/app/chats/") && pathname !== "/app/chats";
-  const isActiveOrbitThread =
-    pathname.startsWith("/app/orbits/") && pathname !== "/app/orbits";
+  const isActiveChatThread = pathname.startsWith("/app/chats/") && pathname !== "/app/chats";
+  const isActiveOrbitThread = pathname.startsWith("/app/orbits/") && pathname !== "/app/orbits";
 
   return (
-    <div className="flex h-dvh w-full flex-col overflow-hidden bg-[var(--bg-canvas)]">
-      {/* Offline Reconnection Banner */}
+    <div className="asterial-workspace flex h-dvh w-full flex-col overflow-hidden bg-[#08090d] text-white">
       {!isNetworkOnline && (
-        <div
-          role="status"
-          className="flex items-center justify-center gap-2 border-b border-white/15 bg-[var(--bg-elevated)] px-4 py-1.5 text-xs text-zinc-200"
-        >
+        <div role="status" className="flex shrink-0 items-center justify-center gap-2 border-b border-amber-200/10 bg-amber-300/[0.07] px-4 py-2 text-xs text-amber-100/80">
           <WifiOff className="h-3.5 w-3.5 shrink-0" />
-          <span>
-            Connection interrupted — ASTERIAL will automatically resynchronize
-            once back online.
-          </span>
+          <span>Connection interrupted — reconnecting and syncing your space.</span>
         </div>
       )}
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        {/* Desktop Primary Navigation Rail */}
-        <nav
-          aria-label="Workspace navigation"
-          className="hidden md:flex w-[68px] shrink-0 flex-col items-center justify-between border-r border-[var(--border-subtle)] bg-[var(--bg-void)] py-4"
-        >
-          <div className="flex flex-col items-center gap-3">
-            <Link
-              href="/app/chats"
-              title={`${ASTERIAL_BRAND.name} v${ASTERIAL_BRAND.version}`}
-              className="rounded-xl p-1 hover:opacity-90 transition-opacity"
-            >
-              <AsterialMark size={32} />
-            </Link>
+        <aside className="hidden w-[232px] shrink-0 flex-col border-r border-white/[0.07] bg-[#090a0f] px-3 pb-3 pt-5 md:flex">
+          <Link href="/app/chats" className="mb-7 flex items-center px-3" aria-label="ASTERIAL workspace">
+            <AsterialLogo size="md" />
+          </Link>
 
-            <button
-              type="button"
-              onClick={() => setActiveModal("search")}
-              title="Search messages & people (⌘K)"
-              aria-label="Search messages and conversations"
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-zinc-400 hover:bg-white/[0.08] hover:text-white transition-colors cursor-pointer"
-            >
-              <Search className="h-4 w-4" />
-            </button>
+          <button type="button" onClick={() => setActiveModal("search")} aria-label="Search workspace" className="group mb-7 flex h-10 items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.025] px-3 text-sm text-zinc-400 transition hover:border-white/[0.15] hover:bg-white/[0.05] hover:text-white">
+            <Search className="h-4 w-4 text-zinc-500 transition group-hover:text-sky-200" />
+            <span className="flex-1 text-left text-xs">Search workspace</span>
+            <kbd className="rounded-md border border-white/[0.08] px-1.5 py-0.5 font-mono text-[9px] text-zinc-600">⌘ K</kbd>
+          </button>
 
-            <div className="h-px w-7 bg-white/[0.08]" />
-
-            <div className="flex flex-col items-center gap-1">
-              {DESKTOP_NAV_ITEMS.map((item) => {
-                const Icon = item.icon;
-                const active = pathname.startsWith(item.matchPrefix);
-                const showBadge =
-                  item.href === "/app/chats" && totalUnreadCount > 0;
-
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    title={item.label}
-                    aria-label={item.label}
-                    aria-current={active ? "page" : undefined}
-                    className={cn(
-                      "relative flex h-9 w-9 items-center justify-center rounded-xl transition-colors",
-                      active
-                        ? "bg-white text-zinc-950"
-                        : "text-zinc-400 hover:bg-white/[0.06] hover:text-white"
-                    )}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {showBadge && (
-                      <span
-                        className={cn(
-                          "absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 font-mono text-[9px] font-bold",
-                          active
-                            ? "bg-zinc-950 text-white ring-2 ring-white"
-                            : "bg-white text-zinc-950"
-                        )}
-                      >
-                        {totalUnreadCount > 99 ? "99+" : totalUnreadCount}
-                      </span>
-                    )}
-                  </Link>
-                );
-              })}
-            </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-1">
+            {(["YOUR SPACE", "DISCOVER", "PERSONAL"] as const).map((group) => (
+              <div key={group} className="mb-6">
+                <p className="mb-2 px-3 text-[9px] font-semibold tracking-[0.2em] text-zinc-600">{group}</p>
+                <nav aria-label={group} className="space-y-1">
+                  {DESKTOP_NAV_ITEMS.filter((item) => item.group === group).map((item) => {
+                    const Icon = item.icon;
+                    const active = pathname.startsWith(item.matchPrefix);
+                    const showBadge = item.href === "/app/chats" && totalUnreadCount > 0;
+                    return (
+                      <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined}
+                        className={cn("group relative flex h-10 items-center gap-3 rounded-xl px-3 text-[13px] font-medium transition duration-200",
+                          active ? "bg-white text-[#0a0b0f] shadow-[0_5px_20px_rgba(255,255,255,0.06)]" : "text-zinc-400 hover:bg-white/[0.045] hover:text-zinc-100")}>
+                        <Icon className={cn("h-[17px] w-[17px] shrink-0", active ? "text-[#0a0b0f]" : "text-zinc-500 group-hover:text-sky-200")} />
+                        <span className="flex-1">{item.label}</span>
+                        {showBadge && <span className={cn("flex h-5 min-w-5 items-center justify-center rounded-full px-1 font-mono text-[9px] font-bold", active ? "bg-[#0a0b0f] text-white" : "bg-sky-200 text-[#071018]")}>{totalUnreadCount > 99 ? "99+" : totalUnreadCount}</span>}
+                        {active && <span className="absolute left-0 top-2 h-6 w-[2px] rounded-full bg-sky-300" />}
+                      </Link>
+                    );
+                  })}
+                </nav>
+              </div>
+            ))}
           </div>
 
-          <div className="flex flex-col items-center gap-2.5">
-            {profile && (
-              <Link
-                href="/app/profile"
-                title={`${profile.display_name} (@${profile.username})`}
-              >
-                <Avatar
-                  name={profile.display_name}
-                  avatarPath={profile.avatar_url}
-                  size="sm"
-                  online={
-                    isNetworkOnline && profile.presence_visibility !== "nobody"
-                  }
-                  showPresence
-                />
-              </Link>
+          <button type="button" onClick={() => setActiveModal("new-dm")} className="mb-3 flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-sky-200 to-indigo-200 text-xs font-bold text-[#0a0b10] shadow-[0_8px_24px_rgba(125,185,255,0.12)] transition hover:brightness-105">
+            <Plus className="h-4 w-4" /> New conversation
+          </button>
+
+          <div className="border-t border-white/[0.07] pt-3">
+            {profile ? (
+              <div className="flex items-center gap-2 rounded-xl px-2 py-2 transition hover:bg-white/[0.04]">
+                <Link href="/app/profile" className="shrink-0">
+                  <Avatar name={profile.display_name} avatarPath={profile.avatar_url} size="md" online={isNetworkOnline && profile.presence_visibility !== "nobody"} showPresence />
+                </Link>
+                <Link href="/app/profile" className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-semibold text-zinc-100">{profile.display_name}</p>
+                  <p className="mt-0.5 truncate text-[10px] text-zinc-500">@{profile.username}</p>
+                </Link>
+                <button type="button" onClick={() => void signOut()} title="Sign out" aria-label="Sign out" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-white/[0.07] hover:text-white"><LogOut className="h-4 w-4" /></button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 px-3 py-2"><AsterialMark size={28} /><span className="text-xs text-zinc-500">Your space</span></div>
             )}
-            <button
-              type="button"
-              onClick={() => void signOut()}
-              title="Sign out"
-              aria-label="Sign out"
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200 transition-colors cursor-pointer"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
+            <p className="mt-2 px-3 text-[9px] text-zinc-700">{ASTERIAL_BRAND.name} · v{ASTERIAL_BRAND.version}</p>
           </div>
-        </nav>
+        </aside>
 
-        {/* Dedicated Conversation Sidebar (Desktop on /app/chats/*; Mobile only on /app/chats) */}
         {isChatsSection && (
-          <ConversationSidebar
-            className={cn(
-              "w-full md:w-[320px] lg:w-[340px] shrink-0",
-              isActiveChatThread ? "hidden md:flex" : "flex"
-            )}
-          />
+          <ConversationSidebar className={cn("w-full shrink-0 border-r border-white/[0.07] md:w-[300px] lg:w-[340px]", isActiveChatThread ? "hidden md:flex" : "flex")} />
         )}
 
-        {/* Main Workspace Panel */}
-        <main
-          className={cn(
-            "flex min-w-0 flex-1 flex-col overflow-hidden bg-[var(--bg-canvas)]",
-            pathname === "/app/chats" ? "hidden md:flex" : "flex"
-          )}
-        >
+        <main className={cn("asterial-workspace-main flex min-w-0 flex-1 flex-col overflow-hidden bg-[#0b0c11]", pathname === "/app/chats" ? "hidden md:flex" : "flex")}>
           <ErrorBoundary>{children}</ErrorBoundary>
         </main>
       </div>
 
-      {/* Mobile Bottom Navigation (Hidden inside active full-screen chat or Orbit room) */}
       {!isActiveChatThread && !isActiveOrbitThread && (
-        <nav
-          aria-label="Mobile navigation"
-          className="flex md:hidden items-center justify-around border-t border-[var(--border-subtle)] bg-[var(--bg-void)] px-1 pt-1.5 pb-1.5 pb-safe"
-        >
+        <nav aria-label="Mobile navigation" className="asterial-mobile-nav flex shrink-0 items-center justify-around border-t border-white/[0.08] bg-[#090a0f]/95 px-1 pt-1.5 pb-1.5 pb-safe backdrop-blur-2xl md:hidden">
           {MOBILE_NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const active = pathname.startsWith(item.matchPrefix);
-            const showBadge =
-              item.href === "/app/chats" && totalUnreadCount > 0;
-
+            const showBadge = item.href === "/app/chats" && totalUnreadCount > 0;
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-current={active ? "page" : undefined}
-                className={cn(
-                  "relative flex min-h-[44px] min-w-[48px] flex-col items-center justify-center gap-0.5 rounded-xl px-2 py-1 text-[10px] font-medium transition-colors",
-                  active ? "text-white" : "text-zinc-500 hover:text-zinc-300"
-                )}
-              >
-                <Icon className="h-4 w-4" />
+              <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined}
+                className={cn("relative flex min-h-[48px] min-w-[50px] flex-col items-center justify-center gap-1 rounded-xl px-2 text-[9px] font-medium transition",
+                  active ? "text-white" : "text-zinc-600 hover:text-zinc-300")}>
+                <span className={cn("flex h-7 w-9 items-center justify-center rounded-xl transition", active ? "bg-white/[0.09] text-sky-200" : "")}><Icon className="h-[17px] w-[17px]" /></span>
                 <span>{item.label}</span>
-                {showBadge && (
-                  <span className="absolute right-1 top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-white px-1 font-mono text-[9px] font-bold text-zinc-950">
-                    {totalUnreadCount > 99 ? "99+" : totalUnreadCount}
-                  </span>
-                )}
+                {showBadge && <span className="absolute right-1 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-sky-200 px-1 font-mono text-[9px] font-bold text-[#071018]">{totalUnreadCount > 99 ? "99+" : totalUnreadCount}</span>}
               </Link>
             );
           })}
+          <Link href="/app/settings" aria-current={pathname.startsWith("/app/settings") ? "page" : undefined} className={cn("flex min-h-[48px] min-w-[50px] flex-col items-center justify-center gap-1 rounded-xl px-2 text-[9px] font-medium", pathname.startsWith("/app/settings") ? "text-white" : "text-zinc-600")}>
+            <span className="flex h-7 w-9 items-center justify-center rounded-xl"><Settings className="h-[17px] w-[17px]" /></span><span>Settings</span>
+          </Link>
         </nav>
       )}
 
