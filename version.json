@@ -1,8 +1,8 @@
 {
   "name": "ASTERIAL",
-  "version": "1.2.0",
-  "displayVersion": "1.2",
-  "versionCode": 12000,
+  "version": "1.3.0",
+  "displayVersion": "1.3.0",
+  "versionCode": 13000,
   "channel": "stable",
   "developer": "Ritam Das",
   "attribution": "By X Huracan",
@@ -11,10 +11,10 @@
   "githubRepo": "frRitamDas/Asterial",
   "releaseDate": "October 2026",
   "releaseNotes": [
-    "Multi-product Phase 1 architecture separating the Next.js full-stack website and dedicated React Native Android application (com.xhuracan.asterial)",
-    "Shared @asterial/core TypeScript package unifying database contracts, Phase 2+ social models, Zod validation, and theme tokens",
-    "Dedicated React Native 0.83 + Hermes native Android foundation connected directly to Supabase Auth & PostgreSQL RLS (zero WebView)",
-    "Automated GitHub Actions pipeline validating @asterial/core, Next.js Web, and compiling the React Native Android APK",
-    "Full preservation of existing 1:1 & group real-time messaging, private Storage signed URLs, and four-theme visual system"
+    "Complete native React Native 0.83 Android authentication: email sign-in, live @username registration, password visibility controls, recovery deep links, and first-run profile onboarding",
+    "Full native Android 1:1 and group real-time messaging parity with composite (created_at, id) keyset cursor pagination, replies, reactions, edits, unsend, typing indicators, and live presence",
+    "Private Supabase Storage attachment & avatar pipeline on Android with binary magic-byte verification, live streaming upload progress, cancellation, and signed-URL image/document viewing",
+    "Native Contacts directory, user profile sheets, group role administration (owner/admin/member), user blocking, abuse reporting, and read-receipt privacy trigger enforcement",
+    "Tag-driven GitHub Actions Android release pipeline compiling Hermes bytecode APKs, verifying signatures and SHA-256 checksums, and publishing official GitHub Releases automatically"
   ]
 }

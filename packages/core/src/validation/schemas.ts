@@ -68,6 +68,8 @@ export const profileUpdateSchema = z.object({
     .default(""),
 });
 
+export const profileSchema = profileUpdateSchema;
+
 export const messageBodySchema = z
   .string()
   .max(4000, "Message cannot exceed 4,000 characters.");

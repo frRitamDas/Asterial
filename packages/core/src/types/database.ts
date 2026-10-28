@@ -12,6 +12,8 @@ export type ReportCategory =
   | "illegal_content"
   | "other";
 
+export type ReportReason = ReportCategory;
+
 export interface Profile {
   id: string;
   username: string;
@@ -27,6 +29,8 @@ export interface Profile {
   updated_at: string;
 }
 
+export type ProfileRow = Profile;
+
 export interface NotificationPreferences {
   user_id: string;
   in_app_enabled: boolean;
@@ -40,6 +44,8 @@ export interface NotificationPreferences {
   reduced_motion: boolean;
   updated_at: string;
 }
+
+export type NotificationPreferencesRow = NotificationPreferences;
 
 export interface ConversationRow {
   id: string;

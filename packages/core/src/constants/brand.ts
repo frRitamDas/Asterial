@@ -38,8 +38,14 @@ export interface ThemePalette {
   textMuted: string;
   borderSubtle: string;
   borderStrong: string;
+  accent: string;
+  accentSoft: string;
   accentBg: string;
   accentFg: string;
+  bubbleOut: string;
+  bubbleOutFg: string;
+  bubbleOutBorder: string;
+  bubbleIn: string;
   danger: string;
   success: string;
 }
@@ -59,8 +65,14 @@ export const THEME_PALETTES: Record<AppearanceTheme, ThemePalette> = {
     textMuted: "#63636E",
     borderSubtle: "rgba(255, 255, 255, 0.08)",
     borderStrong: "rgba(255, 255, 255, 0.16)",
+    accent: "#E2E8F0",
+    accentSoft: "rgba(226, 232, 240, 0.12)",
     accentBg: "#F4F4F6",
     accentFg: "#09090B",
+    bubbleOut: "#1D2432",
+    bubbleOutFg: "#F8FAFC",
+    bubbleOutBorder: "rgba(226, 232, 240, 0.24)",
+    bubbleIn: "#14141B",
     danger: "#EF4444",
     success: "#22C55E",
   },
@@ -78,8 +90,14 @@ export const THEME_PALETTES: Record<AppearanceTheme, ThemePalette> = {
     textMuted: "#63636E",
     borderSubtle: "rgba(255, 255, 255, 0.09)",
     borderStrong: "rgba(255, 255, 255, 0.18)",
+    accent: "#F8FAFC",
+    accentSoft: "rgba(248, 250, 252, 0.13)",
     accentBg: "#FFFFFF",
     accentFg: "#000000",
+    bubbleOut: "#181C26",
+    bubbleOutFg: "#FFFFFF",
+    bubbleOutBorder: "rgba(255, 255, 255, 0.26)",
+    bubbleIn: "#0E0E14",
     danger: "#EF4444",
     success: "#22C55E",
   },
@@ -97,8 +115,14 @@ export const THEME_PALETTES: Record<AppearanceTheme, ThemePalette> = {
     textMuted: "#6E717D",
     borderSubtle: "rgba(255, 255, 255, 0.09)",
     borderStrong: "rgba(255, 255, 255, 0.17)",
+    accent: "#CBD5E1",
+    accentSoft: "rgba(203, 213, 225, 0.13)",
     accentBg: "#F4F4F6",
     accentFg: "#0B0C0E",
+    bubbleOut: "#242A38",
+    bubbleOutFg: "#F8FAFC",
+    bubbleOutBorder: "rgba(203, 213, 225, 0.25)",
+    bubbleIn: "#1B1D24",
     danger: "#EF4444",
     success: "#22C55E",
   },
@@ -116,8 +140,14 @@ export const THEME_PALETTES: Record<AppearanceTheme, ThemePalette> = {
     textMuted: "#767682",
     borderSubtle: "rgba(17, 17, 21, 0.09)",
     borderStrong: "rgba(17, 17, 21, 0.18)",
+    accent: "#18181B",
+    accentSoft: "rgba(24, 24, 27, 0.08)",
     accentBg: "#111115",
     accentFg: "#FFFFFF",
+    bubbleOut: "#E4E4E7",
+    bubbleOutFg: "#111115",
+    bubbleOutBorder: "rgba(24, 24, 27, 0.18)",
+    bubbleIn: "#FFFFFF",
     danger: "#DC2626",
     success: "#16A34A",
   },
