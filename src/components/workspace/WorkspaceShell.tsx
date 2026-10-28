@@ -16,7 +16,6 @@ import {
   UserCircle,
   WifiOff,
   Plus,
-  ChevronDown,
 } from "lucide-react";
 import { AsterialLogo, AsterialMark } from "@/components/brand/AsterialLogo";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
