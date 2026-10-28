@@ -145,48 +145,36 @@ export function InboxScreen({
       >
         <View style={styles.screenHeading}>
           <Text style={[styles.screenTitle, { color: palette.textPrimary }]}>
-            {mode === "groups" ? "Groups" : "Messages"}
+            {mode === "groups" ? "Groups" : "Chats"}
           </Text>
           <Text style={[styles.screenSubtitle, { color: palette.textMuted }]}>
-            {mode === "groups" ? "Your group conversations" : "Your conversations"}
+            {mode === "groups" ? "Your people, in one place" : "Stay close to your people"}
           </Text>
         </View>
-
         <View style={styles.headerActions}>
           {mode !== "groups" ? (
             <Pressable
               onPress={() => setShowNewDirect(true)}
               accessibilityRole="button"
-              accessibilityLabel="New direct message"
+              accessibilityLabel="Start a new chat"
               style={[
                 styles.headerActionBtn,
-                {
-                  backgroundColor: palette.bgElevated,
-                  borderColor: palette.borderSubtle,
-                },
+                { backgroundColor: palette.bgElevated, borderColor: palette.borderSubtle },
               ]}
             >
-              <Text style={{ color: palette.textPrimary, fontWeight: "700", fontSize: 12 }}>
-                + Chat
-              </Text>
+              <Text style={[styles.headerActionGlyph, { color: palette.textPrimary }]}>⌕</Text>
             </Pressable>
           ) : null}
-
           <Pressable
             onPress={() => setShowNewGroup(true)}
             accessibilityRole="button"
-            accessibilityLabel="Create group"
+            accessibilityLabel="Create a group"
             style={[
               styles.headerActionBtn,
-              {
-                backgroundColor: palette.accent,
-                borderColor: palette.accent,
-              },
+              { backgroundColor: palette.accent, borderColor: palette.accent },
             ]}
           >
-            <Text style={{ color: palette.accentFg, fontWeight: "800", fontSize: 12 }}>
-              + Group
-            </Text>
+            <Text style={[styles.headerActionGlyph, { color: palette.accentFg }]}>＋</Text>
           </Pressable>
         </View>
       </View>
@@ -195,7 +183,7 @@ export function InboxScreen({
         <TextInput
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholder="Search conversations or messages…"
+          placeholder="Ask or search anything"
           placeholderTextColor={palette.textMuted}
           autoCapitalize="none"
           autoCorrect={false}
@@ -396,7 +384,7 @@ export function InboxScreen({
               style={[
                 styles.convRow,
                 {
-                  paddingVertical: compactRow ? 10 : 13,
+                  paddingVertical: compactRow ? 11 : 15,
                   borderBottomColor: palette.borderSubtle,
                   backgroundColor:
                     unread > 0 ? `${palette.bgSurface}DD` : "transparent",
@@ -408,7 +396,7 @@ export function InboxScreen({
                 storagePath={item.displayAvatarPath}
                 label={item.displayTitle}
                 palette={palette}
-                size={compactRow ? 42 : 48}
+                size={compactRow ? 46 : 54}
                 isGroup={item.conversation.type === "group"}
                 isOnline={peerOnline}
               />
@@ -425,9 +413,9 @@ export function InboxScreen({
                       },
                     ]}
                   >
-                    {item.membership.pinned ? "📌 " : ""}
+                    {item.membership.pinned ? "⌁ " : ""}
                     {item.displayTitle}
-                    {item.membership.is_muted ? " 🔕" : ""}
+                    {item.membership.is_muted ? "  · muted" : ""}
                   </Text>
                   <Text
                     style={[
@@ -631,9 +619,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 15,
+    borderBottomWidth: 0,
   },
   screenHeading: {
     flex: 1,
@@ -641,49 +630,57 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   screenTitle: {
-    fontSize: 19,
-    lineHeight: 24,
+    fontSize: 30,
+    lineHeight: 36,
     fontWeight: "800",
-    letterSpacing: -0.35,
+    letterSpacing: -1.05,
   },
   screenSubtitle: {
-    fontSize: 11.5,
-    lineHeight: 15,
+    marginTop: 2,
+    fontSize: 12.5,
+    lineHeight: 17,
     fontWeight: "500",
   },
   headerActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 9,
   },
   headerActionBtn: {
+    width: 42,
+    height: 42,
     borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
+    borderRadius: 21,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerActionGlyph: {
+    fontSize: 25,
+    lineHeight: 29,
+    fontWeight: "500",
   },
   controlsArea: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 6,
+    paddingHorizontal: 18,
+    paddingTop: 5,
+    paddingBottom: 8,
   },
   searchInput: {
     borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 13,
-    paddingVertical: 9.5,
-    fontSize: 13.5,
+    borderRadius: 17,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    fontSize: 14,
   },
   filterRow: {
-    paddingTop: 9,
-    paddingBottom: 3,
-    gap: 7,
+    paddingTop: 12,
+    paddingBottom: 5,
+    gap: 8,
   },
   filterChip: {
     borderWidth: 1,
     borderRadius: 999,
-    paddingHorizontal: 13,
-    paddingVertical: 6,
+    paddingHorizontal: 15,
+    paddingVertical: 8,
   },
   messageHitsBox: {
     marginHorizontal: 16,
@@ -753,9 +750,9 @@ const styles = StyleSheet.create({
   convRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
+    gap: 14,
+    paddingHorizontal: 18,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   convBody: {
     flex: 1,
@@ -768,7 +765,8 @@ const styles = StyleSheet.create({
   },
   convTitle: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 15.5,
+    letterSpacing: -0.2,
   },
   convTime: {
     fontSize: 11.5,
@@ -783,7 +781,8 @@ const styles = StyleSheet.create({
   },
   convPreview: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 13.2,
+    lineHeight: 18,
   },
   unreadBadge: {
     minWidth: 20,
