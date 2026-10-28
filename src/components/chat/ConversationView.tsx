@@ -730,15 +730,29 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
     setLoadingOlder(true);
     try {
       const supabase = getSupabaseBrowserClient();
-      const { data } = await supabase
-        .from("messages")
-        .select("*")
-        .eq("conversation_id", conversationId)
-        .lt("created_at", oldest.created_at)
-        .order("created_at", { ascending: false })
-        .limit(MESSAGES_PAGE_SIZE + 1);
+      const { data: rpcRows, error: rpcErr } = await supabase.rpc(
+        "get_conversation_messages_page",
+        {
+          p_conversation_id: conversationId,
+          p_before_created_at: oldest.created_at,
+          p_before_id: oldest.id,
+          p_limit: MESSAGES_PAGE_SIZE + 1,
+        }
+      );
 
-      const rows = (data || []) as MessageRow[];
+      let rows: MessageRow[];
+      if (!rpcErr && Array.isArray(rpcRows)) {
+        rows = rpcRows as MessageRow[];
+      } else {
+        const { data } = await supabase
+          .from("messages")
+          .select("*")
+          .eq("conversation_id", conversationId)
+          .lt("created_at", oldest.created_at)
+          .order("created_at", { ascending: false })
+          .limit(MESSAGES_PAGE_SIZE + 1);
+        rows = (data || []) as MessageRow[];
+      }
       setHasOlderMessages(rows.length > MESSAGES_PAGE_SIZE);
       const batch = rows.slice(0, MESSAGES_PAGE_SIZE).reverse();
       const hydrated = await enrichMessageBatch(batch);

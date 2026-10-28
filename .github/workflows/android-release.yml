@@ -1,345 +1,423 @@
-name: ASTERIAL Web & Native Android CI/Release
+name: ASTERIAL CI & Native Android Release
 
 on:
   push:
-    branches:
-      - main
-      - "arena/**"
-    tags:
-      - "v*"
+    branches: [main, "arena/**"]
+    tags: ["v*.*.*"]
   pull_request:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
     inputs:
       publish_release:
-        description: "Publish GitHub Release for current version.json if tag does not yet exist"
+        description: "Publish an official GitHub Release (requires matching unused vX.Y.Z tag)"
         required: false
         default: false
         type: boolean
-
-concurrency:
-  group: asterial-ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+      release_tag:
+        description: "Canonical release tag (e.g. v1.3.0) when publish_release is true"
+        required: false
+        default: ""
+        type: string
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: asterial-android-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+
+env:
+  NODE_VERSION: "22"
+  JAVA_VERSION: "17"
+  ANDROID_COMPILE_SDK: "36"
+  ANDROID_BUILD_TOOLS: "36.0.0"
+  ANDROID_NDK_VERSION: "27.1.12297006"
+  ANDROID_CMAKE_VERSION: "3.22.1"
 
 jobs:
   verify-and-build-apk:
-    name: Verify Core, Web & Native Android APK
+    name: Verify Multi-Product Suite & Compile Standalone APK
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    permissions:
+      contents: read
+    outputs:
+      should_publish_release: ${{ steps.mode.outputs.should_publish_release }}
+      release_tag: ${{ steps.mode.outputs.release_tag }}
+      semver: ${{ steps.meta.outputs.semver }}
+      version_code: ${{ steps.meta.outputs.version_code }}
+      artifact_name: ${{ steps.apk.outputs.artifact_name }}
+      apk_filename: ${{ steps.apk.outputs.apk_filename }}
+      checksum_filename: ${{ steps.apk.outputs.checksum_filename }}
+      sha256: ${{ steps.apk.outputs.sha256 }}
+      signing_mode: ${{ steps.apk.outputs.signing_mode }}
 
     steps:
-      - name: Checkout repository
+      - name: Checkout exact commit (${{ github.sha }})
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
 
-      - name: Setup Node.js 22
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
         uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
-          cache-dependency-path: |
-            package-lock.json
-            mobile/package-lock.json
 
-      - name: Install root & shared core dependencies
-        run: npm ci
-
-      - name: Install React Native mobile dependencies
-        env:
-          NEXT_PUBLIC_APP_URL: "https://asterial.vercel.app"
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || vars.NEXT_PUBLIC_SUPABASE_URL || '' }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || vars.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' }}
-        run: |
-          npm --prefix mobile ci
-          npm run mobile:env
-
-      - name: Verify centralized version alignment (web, @asterial/core, mobile)
-        run: npm run version:check
-
-      - name: Run strict TypeScript check (web + @asterial/core)
-        run: npm run typecheck
-
-      - name: Run strict TypeScript check (React Native mobile + @asterial/core)
-        run: npm run mobile:typecheck
-
-      - name: Run ESLint (web, @asterial/core, mobile)
-        run: npm run lint
-
-      - name: Run unit tests (web + @asterial/core)
-        run: npm test
-
-      - name: Run unit tests (React Native mobile)
-        run: npm run mobile:test
-
-      - name: Build Next.js web application
-        env:
-          NEXT_PUBLIC_GIT_SHA: ${{ github.sha }}
-          NEXT_PUBLIC_APP_URL: "https://asterial.vercel.app"
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || vars.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co' }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || vars.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'ci-build-verification-public-anon-placeholder-token' }}
-        run: npm run build
-
-      - name: Resolve release metadata & monotonic versionCode
-        id: meta
-        run: |
-          VERSION=$(node -p "require('./version.json').version")
-          BASE_CODE=$(node -p "require('./version.json').versionCode")
-          PACKAGE_ID=$(node -p "require('./version.json').androidPackageId")
-          RUN_OFFSET=${GITHUB_RUN_NUMBER:-0}
-          VERSION_CODE=$((BASE_CODE + RUN_OFFSET))
-          APK_FILENAME="asterial-android-${VERSION}.apk"
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "base_code=${BASE_CODE}" >> "$GITHUB_OUTPUT"
-          echo "version_code=${VERSION_CODE}" >> "$GITHUB_OUTPUT"
-          echo "package_id=${PACKAGE_ID}" >> "$GITHUB_OUTPUT"
-          echo "apk_filename=${APK_FILENAME}" >> "$GITHUB_OUTPUT"
-
-      - name: Setup JDK 17 (Temurin — React Native 0.83 Kotlin JVM Toolchain)
+      - name: Setup Temurin JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v6
         with:
           distribution: "temurin"
-          java-version: "17"
+          java-version: ${{ env.JAVA_VERSION }}
           cache: "gradle"
 
-      - name: Provision Android SDK 36, Build-Tools 36.0.0, NDK 27.1.12297006 & CMake 3.22.1
-        run: |
-          SDK_DIR="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
-          if [ ! -d "$SDK_DIR" ] || [ ! -w "$SDK_DIR" ]; then
-            SDK_DIR="${RUNNER_TEMP}/android-sdk"
-            mkdir -p "$SDK_DIR"
-          fi
-
-          SDKMANAGER=""
-          for candidate in \
-            "$SDK_DIR/cmdline-tools/latest/bin/sdkmanager" \
-            $(ls -d "$SDK_DIR"/cmdline-tools/*/bin/sdkmanager 2>/dev/null || true); do
-            if [ -x "$candidate" ]; then
-              SDKMANAGER="$candidate"
-              break
-            fi
-          done
-
-          if [ -z "$SDKMANAGER" ]; then
-            echo "Installing official Android Command Line Tools into $SDK_DIR..."
-            CMDLINE_ZIP="${RUNNER_TEMP}/commandlinetools.zip"
-            curl -fsSL "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" -o "$CMDLINE_ZIP"
-            mkdir -p "$SDK_DIR/cmdline-tools"
-            unzip -q "$CMDLINE_ZIP" -d "$SDK_DIR/cmdline-tools"
-            mv "$SDK_DIR/cmdline-tools/cmdline-tools" "$SDK_DIR/cmdline-tools/latest"
-            rm -f "$CMDLINE_ZIP"
-            SDKMANAGER="$SDK_DIR/cmdline-tools/latest/bin/sdkmanager"
-          fi
-
-          yes | "$SDKMANAGER" --sdk_root="$SDK_DIR" --licenses > /dev/null || true
-          "$SDKMANAGER" --sdk_root="$SDK_DIR" \
-            "platform-tools" \
-            "platforms;android-36" \
-            "build-tools;36.0.0" \
-            "ndk;27.1.12297006" \
-            "cmake;3.22.1"
-
-          echo "ANDROID_HOME=${SDK_DIR}" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=${SDK_DIR}" >> "$GITHUB_ENV"
-          echo "sdk.dir=${SDK_DIR}" > mobile/android/local.properties
-
-      - name: Configure signing mode (secret-free & PR-safe)
-        id: signing
+      - name: Determine Build Mode & Enforce Tag / Duplicate-Release Guards
+        id: mode
         env:
+          GH_TOKEN: ${{ github.token }}
           EVENT_NAME: ${{ github.event_name }}
-          KEYSTORE_B64: ${{ github.event_name != 'pull_request' && secrets.ANDROID_KEYSTORE_BASE64 || '' }}
-          KEYSTORE_PASS: ${{ github.event_name != 'pull_request' && secrets.ANDROID_KEYSTORE_PASSWORD || '' }}
-          KEY_ALIAS_VAL: ${{ github.event_name != 'pull_request' && secrets.ANDROID_KEY_ALIAS || '' }}
-          KEY_PASS_VAL: ${{ github.event_name != 'pull_request' && secrets.ANDROID_KEY_PASSWORD || '' }}
+          GIT_REF: ${{ github.ref }}
+          DISPATCH_PUBLISH: ${{ inputs.publish_release }}
+          DISPATCH_TAG: ${{ inputs.release_tag }}
         run: |
-          if [ "$EVENT_NAME" != "pull_request" ] && [ -n "$KEYSTORE_B64" ] && [ -n "$KEYSTORE_PASS" ] && [ -n "$KEY_ALIAS_VAL" ] && [ -n "$KEY_PASS_VAL" ]; then
-            KEYSTORE_FILE="${RUNNER_TEMP}/asterial-release.jks"
-            printf '%s' "$KEYSTORE_B64" | tr -d ' \n\r\t' | base64 -d > "$KEYSTORE_FILE"
-            chmod 600 "$KEYSTORE_FILE"
-            echo "keystore_path=${KEYSTORE_FILE}" >> "$GITHUB_OUTPUT"
-            echo "gradle_task=assembleRelease" >> "$GITHUB_OUTPUT"
-            echo "build_type=release" >> "$GITHUB_OUTPUT"
-            echo "signing_status=Production keystore signed (V1/V2/V3)" >> "$GITHUB_OUTPUT"
-            echo "is_production_signed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "keystore_path=" >> "$GITHUB_OUTPUT"
-            echo "gradle_task=assembleDebug" >> "$GITHUB_OUTPUT"
-            echo "build_type=debug" >> "$GITHUB_OUTPUT"
-            if [ "$EVENT_NAME" = "pull_request" ]; then
-              echo "signing_status=Debug-signed PR verification APK (signing secrets isolated on PRs)" >> "$GITHUB_OUTPUT"
-            else
-              echo "signing_status=Debug-signed installable APK (ANDROID_KEYSTORE_* secrets not configured)" >> "$GITHUB_OUTPUT"
-            fi
-            echo "is_production_signed=false" >> "$GITHUB_OUTPUT"
-          fi
+          MANIFEST_VERSION=$(node -p "require('./version.json').version")
 
-      - name: Build Native React Native Android APK via Gradle
-        working-directory: mobile/android
-        env:
-          CI: "true"
-          ASTERIAL_VERSION_NAME: ${{ steps.meta.outputs.version }}
-          ASTERIAL_VERSION_CODE: ${{ steps.meta.outputs.version_code }}
-          ANDROID_KEYSTORE_PATH: ${{ steps.signing.outputs.keystore_path }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ github.event_name != 'pull_request' && secrets.ANDROID_KEYSTORE_PASSWORD || '' }}
-          ANDROID_KEY_ALIAS: ${{ github.event_name != 'pull_request' && secrets.ANDROID_KEY_ALIAS || '' }}
-          ANDROID_KEY_PASSWORD: ${{ github.event_name != 'pull_request' && secrets.ANDROID_KEY_PASSWORD || '' }}
-        run: |
-          chmod +x ./gradlew
-          ./gradlew ${{ steps.signing.outputs.gradle_task }} --no-daemon --stacktrace
-
-      - name: Verify embedded React Native bundle, APK signature & stage artifacts
-        id: package
-        run: |
-          mkdir -p dist-android
-          if [ "${{ steps.signing.outputs.build_type }}" = "release" ]; then
-            RAW_APK="mobile/android/app/build/outputs/apk/release/app-release.apk"
-          else
-            RAW_APK="mobile/android/app/build/outputs/apk/debug/app-debug.apk"
-          fi
-
-          if [ ! -f "$RAW_APK" ]; then
-            echo "Expected APK not found at $RAW_APK"
-            find mobile/android/app/build/outputs/apk -type f || true
-            exit 1
-          fi
-
-          DEST_APK="dist-android/${{ steps.meta.outputs.apk_filename }}"
-          cp "$RAW_APK" "$DEST_APK"
-
-          if ! unzip -l "$DEST_APK" | grep -q "assets/index.android.bundle"; then
-            echo "ERROR: Standalone React Native bundle (assets/index.android.bundle) missing from APK!"
-            exit 1
-          fi
-          echo "Verified standalone embedded React Native Hermes bundle inside APK."
-
-          APKSIGNER="${ANDROID_SDK_ROOT}/build-tools/36.0.0/apksigner"
-          "$APKSIGNER" verify --verbose "$DEST_APK"
-
-          (cd dist-android && sha256sum "${{ steps.meta.outputs.apk_filename }}" > "${{ steps.meta.outputs.apk_filename }}.sha256")
-          SHA256_VAL=$(awk '{print $1}' "dist-android/${{ steps.meta.outputs.apk_filename }}.sha256")
-          APK_BYTES=$(wc -c < "$DEST_APK" | tr -d ' ')
-          echo "sha256=${SHA256_VAL}" >> "$GITHUB_OUTPUT"
-          echo "size_bytes=${APK_BYTES}" >> "$GITHUB_OUTPUT"
-
-          SHA256="$SHA256_VAL" SIZE_BYTES="$APK_BYTES" node -e '
-            const fs = require("fs");
-            const v = require("./version.json");
-            const manifest = {
-              product: v.name,
-              architecture: "react-native-0.83-fabric-hermes",
-              version: process.env.VERSION,
-              versionCode: Number(process.env.VERSION_CODE),
-              packageId: v.androidPackageId,
-              buildType: process.env.BUILD_TYPE,
-              productionSigned: process.env.PROD_SIGNED === "true",
-              signingStatus: process.env.SIGNING_STATUS,
-              apkFilename: process.env.APK_FILENAME,
-              sha256: process.env.SHA256,
-              sizeBytes: Number(process.env.SIZE_BYTES),
-              commitSha: process.env.GITHUB_SHA,
-              builtAt: new Date().toISOString(),
-              developer: v.developer,
-              attribution: v.attribution
-            };
-            fs.writeFileSync(
-              `dist-android/asterial-android-${process.env.VERSION}.manifest.json`,
-              JSON.stringify(manifest, null, 2) + "\n"
-            );
-          '
-        env:
-          VERSION: ${{ steps.meta.outputs.version }}
-          VERSION_CODE: ${{ steps.meta.outputs.version_code }}
-          BUILD_TYPE: ${{ steps.signing.outputs.build_type }}
-          PROD_SIGNED: ${{ steps.signing.outputs.is_production_signed }}
-          SIGNING_STATUS: ${{ steps.signing.outputs.signing_status }}
-          APK_FILENAME: ${{ steps.meta.outputs.apk_filename }}
-
-      - name: Upload APK build artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: asterial-android-${{ steps.meta.outputs.version }}
-          path: |
-            dist-android/${{ steps.meta.outputs.apk_filename }}
-            dist-android/${{ steps.meta.outputs.apk_filename }}.sha256
-            dist-android/asterial-android-${{ steps.meta.outputs.version }}.manifest.json
-          if-no-files-found: error
-          retention-days: 90
-
-      - name: Publish GitHub Release (non-clobbering)
-        if: >-
-          github.event_name != 'pull_request' &&
-          (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') || inputs.publish_release == true)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: v${{ steps.meta.outputs.version }}
-          VERSION_CODE: ${{ steps.meta.outputs.version_code }}
-          BUILD_TYPE: ${{ steps.signing.outputs.build_type }}
-          SIGNING_STATUS: ${{ steps.signing.outputs.signing_status }}
-          APK_SHA256: ${{ steps.package.outputs.sha256 }}
-        run: |
-          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
-            echo "GitHub Release $TAG_NAME already exists — skipping overwrite to protect existing release assets."
-            echo "release_url=https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG_NAME}" >> "$GITHUB_ENV"
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            echo "build_mode=pr-validation" >> "$GITHUB_OUTPUT"
+            echo "should_publish_release=false" >> "$GITHUB_OUTPUT"
+            echo "release_tag=" >> "$GITHUB_OUTPUT"
+            echo "Mode: Pull Request Validation (no signing secrets, no GitHub Release)."
             exit 0
           fi
 
-          NOTES_FILE="${RUNNER_TEMP}/release-notes.md"
-          NOTES_FILE="$NOTES_FILE" node -e '
-            const fs = require("fs");
-            const v = require("./version.json");
-            const lines = [
-              `## ${v.name} v${v.version} — Web & Native Android Release`,
-              "",
-              `- **Official Developer:** ${v.developer} (${v.attribution})`,
-              `- **Android Architecture:** Dedicated React Native 0.83 (Fabric + Hermes, zero WebView)`,
-              `- **Android Package ID:** \`${v.androidPackageId}\``,
-              `- **Android Version Code:** \`${process.env.VERSION_CODE}\``,
-              `- **Build Type:** \`${process.env.BUILD_TYPE}\``,
-              `- **Signing Status:** ${process.env.SIGNING_STATUS}`,
-              `- **Commit SHA:** \`${process.env.GITHUB_SHA}\``,
-              `- **APK SHA-256:** \`${process.env.APK_SHA256}\``,
-              `- **Production Web App:** ${v.productionUrl}`,
-              "",
-              "### Highlights",
-              ...v.releaseNotes.map((n) => `- ${n}`),
-            ];
-            fs.writeFileSync(process.env.NOTES_FILE, lines.join("\n") + "\n");
-          '
+          if [[ "$GIT_REF" == refs/tags/v* ]]; then
+            RAW_TAG="${GIT_REF#refs/tags/}"
+            if [[ ! "$RAW_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::Invalid semantic version tag '$RAW_TAG'. Expected canonical vMAJOR.MINOR.PATCH (e.g. v1.3.0)."
+              exit 1
+            fi
+            TAG_VERSION="${RAW_TAG#v}"
+            if [ "$TAG_VERSION" != "$MANIFEST_VERSION" ]; then
+              echo "::error::Tag '$RAW_TAG' ($TAG_VERSION) does not match version.json ($MANIFEST_VERSION) at commit $GITHUB_SHA."
+              exit 1
+            fi
+            if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RAW_TAG}" >/dev/null 2>&1; then
+              echo "::error::GitHub Release '${RAW_TAG}' already exists. Refusing to overwrite or clobber existing release assets."
+              exit 1
+            fi
+            echo "build_mode=official-release" >> "$GITHUB_OUTPUT"
+            echo "should_publish_release=true" >> "$GITHUB_OUTPUT"
+            echo "release_tag=${RAW_TAG}" >> "$GITHUB_OUTPUT"
+            echo "Mode: Official Tagged Release (${RAW_TAG})."
+            exit 0
+          fi
 
-          gh release create "$TAG_NAME" \
-            "dist-android/${{ steps.meta.outputs.apk_filename }}" \
-            "dist-android/${{ steps.meta.outputs.apk_filename }}.sha256" \
-            "dist-android/asterial-android-${{ steps.meta.outputs.version }}.manifest.json" \
-            --title "ASTERIAL v${{ steps.meta.outputs.version }}" \
-            --notes-file "$NOTES_FILE" \
-            --target "${GITHUB_SHA}"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$DISPATCH_PUBLISH" = "true" ]; then
+            TARGET_TAG="${DISPATCH_TAG:-v${MANIFEST_VERSION}}"
+            if [[ ! "$TARGET_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::Invalid release_tag '$TARGET_TAG'. Expected vMAJOR.MINOR.PATCH."
+              exit 1
+            fi
+            if [ "${TARGET_TAG#v}" != "$MANIFEST_VERSION" ]; then
+              echo "::error::release_tag '$TARGET_TAG' does not match version.json ($MANIFEST_VERSION)."
+              exit 1
+            fi
+            if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TARGET_TAG}" >/dev/null 2>&1; then
+              echo "::error::GitHub Release '${TARGET_TAG}' already exists. Refusing to overwrite existing release."
+              exit 1
+            fi
+            echo "build_mode=official-release" >> "$GITHUB_OUTPUT"
+            echo "should_publish_release=true" >> "$GITHUB_OUTPUT"
+            echo "release_tag=${TARGET_TAG}" >> "$GITHUB_OUTPUT"
+            echo "Mode: Manual Official Release (${TARGET_TAG})."
+            exit 0
+          fi
 
-      - name: Write workflow build summary
-        if: always()
+          echo "build_mode=ci-build" >> "$GITHUB_OUTPUT"
+          echo "should_publish_release=false" >> "$GITHUB_OUTPUT"
+          echo "release_tag=" >> "$GITHUB_OUTPUT"
+          echo "Mode: Ordinary Branch CI Build (compiles & verifies standalone APK artifact without publishing a GitHub Release)."
+
+      - name: Provision Android SDK, Build-Tools, NDK & CMake
+        run: |
+          ANDROID_HOME="${ANDROID_HOME:-$HOME/android-sdk}"
+          mkdir -p "$ANDROID_HOME/cmdline-tools"
+          if [ ! -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+            curl -fsSL https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o /tmp/cmdtools.zip
+            unzip -q /tmp/cmdtools.zip -d /tmp/cmdtools-extract
+            mv /tmp/cmdtools-extract/cmdline-tools "$ANDROID_HOME/cmdline-tools/latest"
+            rm -rf /tmp/cmdtools.zip /tmp/cmdtools-extract
+          fi
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "platform-tools" \
+            "platforms;android-${ANDROID_COMPILE_SDK}" \
+            "build-tools;${ANDROID_BUILD_TOOLS}" \
+            "ndk;${ANDROID_NDK_VERSION}" \
+            "cmake;${ANDROID_CMAKE_VERSION}" > /dev/null
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+
+      - name: Install Root & React Native Mobile Dependencies
+        run: |
+          npm ci
+          npm --prefix mobile ci
+
+      - name: Prepare Public Mobile Runtime Config
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_APP_URL: "https://asterial.vercel.app"
+        run: npm run mobile:env
+
+      - name: Verify Version Alignment, Strict TypeScript, ESLint, Tests & Next.js Build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'public-anon-placeholder' }}
+          NEXT_PUBLIC_APP_URL: "https://asterial.vercel.app"
+        run: |
+          npm run version:check
+          npm run typecheck
+          npm run mobile:typecheck
+          npm run lint
+          npm test
+          npm run mobile:test
+          npm run build
+
+      - name: Compute Release Version Metadata
+        id: meta
+        run: |
+          SEMVER=$(node -p "require('./version.json').version")
+          BASE_CODE=$(node -p "require('./version.json').versionCode")
+          COMPUTED_CODE=$((BASE_CODE + GITHUB_RUN_NUMBER))
+          echo "semver=$SEMVER" >> "$GITHUB_OUTPUT"
+          echo "version_code=$COMPUTED_CODE" >> "$GITHUB_OUTPUT"
+
+      - name: Decode Production Keystore (Non-PR Builds Only When Configured)
+        id: keystore
+        if: github.event_name != 'pull_request'
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ] && [ -n "$KS_PASS" ] && [ -n "$KS_ALIAS" ] && [ -n "$KEY_PASS" ]; then
+            KEYSTORE_FILE="${RUNNER_TEMP}/asterial-release.jks"
+            printf '%s' "$KEYSTORE_B64" | base64 --decode > "$KEYSTORE_FILE"
+            echo "keystore_ready=true" >> "$GITHUB_OUTPUT"
+            echo "keystore_path=$KEYSTORE_FILE" >> "$GITHUB_OUTPUT"
+          else
+            echo "keystore_ready=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Compile, Verify Hermes Bytecode & Sign React Native Android APK
+        id: apk
+        working-directory: mobile/android
+        env:
+          CI: "true"
+          ASTERIAL_VERSION_NAME: ${{ steps.meta.outputs.semver }}
+          ASTERIAL_VERSION_CODE: ${{ steps.meta.outputs.version_code }}
+          ANDROID_KEYSTORE_PATH: ${{ steps.keystore.outputs.keystore_path }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          mkdir -p ../../release-dist
+
+          if [ "${{ steps.keystore.outputs.keystore_ready }}" = "true" ]; then
+            ./gradlew assembleRelease --no-daemon
+            BUILT_APK="app/build/outputs/apk/release/app-release.apk"
+            APK_FILENAME="asterial-android-${ASTERIAL_VERSION_NAME}.apk"
+            SIGNING_MODE="production-keystore"
+          else
+            ./gradlew assembleDebug --no-daemon
+            BUILT_APK="app/build/outputs/apk/debug/app-debug.apk"
+            APK_FILENAME="asterial-android-${ASTERIAL_VERSION_NAME}-debug.apk"
+            SIGNING_MODE="debug-signed"
+          fi
+
+          if [ ! -s "$BUILT_APK" ]; then
+            echo "::error::Compiled APK is missing or empty at $BUILT_APK"
+            exit 1
+          fi
+
+          APK_BYTES=$(stat -c%s "$BUILT_APK")
+          if [ "$APK_BYTES" -lt 5000000 ]; then
+            echo "::error::Compiled APK size ($APK_BYTES bytes) is unexpectedly small (< 5 MB)."
+            exit 1
+          fi
+
+          # 1. Verify embedded JavaScript bundle exists AND carries Hermes bytecode magic header (c61fbc03c103191f)
+          unzip -p "$BUILT_APK" assets/index.android.bundle | head -c 8 > /tmp/bundle_magic.bin
+          BUNDLE_MAGIC=$(od -An -tx1 /tmp/bundle_magic.bin | tr -d ' \n')
+          rm -f /tmp/bundle_magic.bin
+          if [ "$BUNDLE_MAGIC" != "c61fbc03c103191f" ]; then
+            echo "::error::assets/index.android.bundle inside APK does not carry Hermes bytecode magic header (got: '$BUNDLE_MAGIC')."
+            exit 1
+          fi
+          echo "Verified embedded Hermes bytecode bundle (magic=$BUNDLE_MAGIC)."
+
+          # 2. Verify APK cryptographic signature via Android SDK apksigner
+          APKSIGNER="$ANDROID_HOME/build-tools/${ANDROID_BUILD_TOOLS}/apksigner"
+          "$APKSIGNER" verify --verbose "$BUILT_APK"
+
+          # 3. Stage APK, SHA-256 checksum, and build manifest
+          DEST_APK="../../release-dist/${APK_FILENAME}"
+          CHECKSUM_FILENAME="${APK_FILENAME}.sha256"
+          cp "$BUILT_APK" "$DEST_APK"
+
+          (
+            cd ../../release-dist
+            sha256sum "$APK_FILENAME" > "$CHECKSUM_FILENAME"
+            sha256sum -c "$CHECKSUM_FILENAME"
+          )
+
+          SHA256_HASH=$(awk '{print $1}' "../../release-dist/${CHECKSUM_FILENAME}")
+          ARTIFACT_NAME="asterial-android-${ASTERIAL_VERSION_NAME}"
+
+          cat <<EOF > "../../release-dist/asterial-android-${ASTERIAL_VERSION_NAME}.manifest.json"
+          {
+            "product": "ASTERIAL",
+            "applicationId": "com.xhuracan.asterial",
+            "architecture": "React Native 0.83.10 (Fabric + Hermes)",
+            "version": "${ASTERIAL_VERSION_NAME}",
+            "versionCode": ${ASTERIAL_VERSION_CODE},
+            "buildMode": "${{ steps.mode.outputs.build_mode }}",
+            "signingMode": "${SIGNING_MODE}",
+            "apkFilename": "${APK_FILENAME}",
+            "apkBytes": ${APK_BYTES},
+            "sha256": "${SHA256_HASH}",
+            "commitSha": "${GITHUB_SHA}"
+          }
+          EOF
+
+          echo "artifact_name=${ARTIFACT_NAME}" >> "$GITHUB_OUTPUT"
+          echo "apk_filename=${APK_FILENAME}" >> "$GITHUB_OUTPUT"
+          echo "checksum_filename=${CHECKSUM_FILENAME}" >> "$GITHUB_OUTPUT"
+          echo "sha256=${SHA256_HASH}" >> "$GITHUB_OUTPUT"
+          echo "signing_mode=${SIGNING_MODE}" >> "$GITHUB_OUTPUT"
+
+      - name: Cleanup Temporary Keystore
+        if: always() && steps.keystore.outputs.keystore_path != ''
+        run: rm -f "${{ steps.keystore.outputs.keystore_path }}"
+
+      - name: Upload Verified Android APK & Checksum Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.apk.outputs.artifact_name }}
+          path: |
+            release-dist/${{ steps.apk.outputs.apk_filename }}
+            release-dist/${{ steps.apk.outputs.checksum_filename }}
+            release-dist/asterial-android-${{ steps.meta.outputs.semver }}.manifest.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Write Build Verification Summary
         run: |
           {
-            echo "## ASTERIAL Web & Native Android Build Summary"
-            echo ""
-            echo "| Property | Value |"
-            echo "| :--- | :--- |"
-            echo "| **Product** | ASTERIAL (Developer: Ritam Das · By X Huracan) |"
-            echo "| **Android Runtime** | React Native 0.83.10 (Fabric + Hermes, zero WebView) |"
-            echo "| **App Version (\`versionName\`)** | \`${{ steps.meta.outputs.version }}\` |"
-            echo "| **Android \`versionCode\`** | \`${{ steps.meta.outputs.version_code }}\` |"
-            echo "| **Application ID** | \`${{ steps.meta.outputs.package_id }}\` |"
-            echo "| **Commit SHA** | \`${{ github.sha }}\` |"
-            echo "| **Trigger Event** | \`${{ github.event_name }}\` (\`${{ github.ref_name }}\`) |"
-            echo "| **Build Type** | \`${{ steps.signing.outputs.build_type }}\` |"
-            echo "| **APK Filename** | \`${{ steps.meta.outputs.apk_filename }}\` |"
-            echo "| **APK SHA-256** | \`${{ steps.package.outputs.sha256 || 'n/a' }}\` |"
-            echo "| **Signing Status** | ${{ steps.signing.outputs.signing_status }} |"
-            echo "| **Workflow Run** | [View Run & Artifact](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |"
-            echo "| **GitHub Releases** | [Releases](${{ github.server_url }}/${{ github.repository }}/releases) |"
-            echo "| **Production Website** | [https://asterial.vercel.app](https://asterial.vercel.app) |"
+            echo "## ASTERIAL v${{ steps.meta.outputs.semver }} — Native Android APK Verification"
+            echo "- **Build Mode:** \`${{ steps.mode.outputs.build_mode }}\`"
+            echo "- **Application ID:** \`com.xhuracan.asterial\`"
+            echo "- **Version / versionCode:** \`${{ steps.meta.outputs.semver }}\` / \`${{ steps.meta.outputs.version_code }}\`"
+            echo "- **APK File:** \`${{ steps.apk.outputs.apk_filename }}\`"
+            echo "- **SHA-256:** \`${{ steps.apk.outputs.sha256 }}\`"
+            if [ "${{ steps.apk.outputs.signing_mode }}" = "production-keystore" ]; then
+              echo "- **Signing Status:** Production keystore signed (V1/V2/V3)"
+            else
+              echo "- **Signing Status:** Debug-signed standalone APK (NOT signed with a production release keystore)"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Scrub temporary keystore from runner
-        if: always()
-        run: rm -f "${RUNNER_TEMP}/asterial-release.jks"
+  publish-github-release:
+    name: Publish Official GitHub Release (${{ needs.verify-and-build-apk.outputs.release_tag }})
+    needs: verify-and-build-apk
+    if: needs.verify-and-build-apk.outputs.should_publish_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout exact commit (${{ github.sha }})
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Download Verified APK & Checksum Artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.verify-and-build-apk.outputs.artifact_name }}
+          path: release-assets
+
+      - name: Re-verify SHA-256 Checksum & Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.verify-and-build-apk.outputs.release_tag }}
+          SEMVER: ${{ needs.verify-and-build-apk.outputs.semver }}
+          VERSION_CODE: ${{ needs.verify-and-build-apk.outputs.version_code }}
+          APK_FILE: ${{ needs.verify-and-build-apk.outputs.apk_filename }}
+          CHECKSUM_FILE: ${{ needs.verify-and-build-apk.outputs.checksum_filename }}
+          SHA256_VAL: ${{ needs.verify-and-build-apk.outputs.sha256 }}
+          SIGNING_MODE: ${{ needs.verify-and-build-apk.outputs.signing_mode }}
+        run: |
+          cd release-assets
+          if [ ! -s "$APK_FILE" ] || [ ! -s "$CHECKSUM_FILE" ]; then
+            echo "::error::Expected verified APK or checksum file missing prior to release publication."
+            exit 1
+          fi
+
+          sha256sum -c "$CHECKSUM_FILE"
+
+          if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
+            echo "::error::GitHub Release '${RELEASE_TAG}' already exists. Aborting to prevent overwriting release assets."
+            exit 1
+          fi
+
+          HIGHLIGHTS=$(node -e "
+            const v = require('../version.json');
+            console.log((v.releaseNotes || []).map(n => '- ' + n).join('\n'));
+          ")
+
+          if [ "$SIGNING_MODE" = "production-keystore" ]; then
+            SIGNING_LINE="Production keystore signed (Android V1 / V2 / V3)"
+          else
+            SIGNING_LINE="Debug-signed standalone APK (NOT signed with a production release keystore — configure ANDROID_KEYSTORE_* repository secrets for Play Protect production signing)"
+          fi
+
+          cat <<EOF > release-notes.md
+          ## ASTERIAL v${SEMVER} — Native Android Release
+
+          - **Application ID:** \`com.xhuracan.asterial\`
+          - **Semantic Version:** \`${SEMVER}\` (\`versionCode\`: \`${VERSION_CODE}\`)
+          - **Architecture:** Dedicated React Native \`0.83.10\` (Fabric + Hermes bytecode, zero WebView)
+          - **Signing Status:** ${SIGNING_LINE}
+          - **Commit SHA:** \`${GITHUB_SHA}\`
+          - **Official Developer:** Ritam Das · **By X Huracan**
+
+          ### Release Highlights
+          ${HIGHLIGHTS}
+
+          ### Verification & Installation (Android 8.0 / API 26+)
+          1. Download **\`${APK_FILE}\`** from the Assets section below.
+          2. Verify integrity against **\`${CHECKSUM_FILE}\`**:
+             \`\`\`bash
+             echo "${SHA256_VAL}  ${APK_FILE}" | sha256sum -c
+             \`\`\`
+          3. Open the APK on your Android device to install and launch directly into native ASTERIAL authentication.
+          EOF
+
+          VERIFY_TAG_FLAG=()
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VERIFY_TAG_FLAG=(--verify-tag)
+          fi
+
+          gh release create "$RELEASE_TAG" \
+            "$APK_FILE" \
+            "$CHECKSUM_FILE" \
+            "asterial-android-${SEMVER}.manifest.json" \
+            --title "ASTERIAL v${SEMVER}" \
+            --notes-file release-notes.md \
+            --target "$GITHUB_SHA" \
+            "${VERIFY_TAG_FLAG[@]}"
+
+          echo "Published GitHub Release ${RELEASE_TAG} with verified APK ${APK_FILE}."

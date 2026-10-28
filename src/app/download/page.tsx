@@ -1,22 +1,22 @@
-import React from "react";
+import type { Metadata } from "next";
 import Link from "next/link";
-import {
-  ArrowLeft,
-  CheckCircle2,
-  GitBranch,
-  Lock,
-  ShieldCheck,
-  Smartphone,
-  Terminal,
-} from "lucide-react";
+import { ArrowLeft, ShieldCheck, Smartphone, Terminal } from "lucide-react";
 import { AsterialLogo } from "@/components/brand/AsterialLogo";
 import { ConstellationBackdrop } from "@/components/brand/ConstellationBackdrop";
 import { AppUpdatePanel } from "@/components/native/AppUpdatePanel";
 import { ASTERIAL_BRAND } from "@/lib/constants/brand";
-import { buildApkFilename } from "@/lib/version/semver";
+import { formatBytes } from "@/lib/utils/format";
+import { resolveAsterialReleaseInfo } from "@/lib/version/githubRelease";
 
-export default function DownloadPage() {
-  const apkName = buildApkFilename(ASTERIAL_BRAND.semver, "release");
+export const metadata: Metadata = {
+  title: `Download Android APK (v${ASTERIAL_BRAND.version})`,
+  description: `Download the standalone React Native Android APK for ${ASTERIAL_BRAND.name} v${ASTERIAL_BRAND.version} (${ASTERIAL_BRAND.androidPackageId}). Official Developer: ${ASTERIAL_BRAND.developer} (${ASTERIAL_BRAND.attribution}).`,
+};
+
+export const revalidate = 60;
+
+export default async function DownloadPage() {
+  const release = await resolveAsterialReleaseInfo();
 
   return (
     <div className="min-h-dvh flex flex-col bg-[var(--bg-void)] text-[var(--text-primary)]">
@@ -42,152 +42,167 @@ export default function DownloadPage() {
         </div>
       </header>
 
-      <main className="relative flex-1 py-14 sm:py-20 overflow-hidden">
+      <main className="relative flex-1 overflow-hidden py-14 sm:py-20">
         <ConstellationBackdrop />
-        <div className="relative z-10 mx-auto max-w-5xl px-5 sm:px-6 space-y-12">
-          {/* Hero */}
-          <section className="max-w-3xl space-y-5">
-            <div className="inline-flex items-center gap-2 rounded-full border border-[var(--border-strong)] bg-white/[0.04] px-3.5 py-1 font-mono text-[11px] uppercase tracking-[0.16em] text-zinc-300">
+        <div className="relative mx-auto max-w-5xl space-y-8 px-4 sm:px-6">
+          <div className="rounded-[28px] border border-[var(--border-subtle)] bg-[var(--bg-surface)]/85 p-7 sm:p-12">
+            <div className="inline-flex items-center gap-2 rounded-full border border-[var(--border-strong)] bg-[var(--accent-signal-subtle)] px-3.5 py-1 text-xs font-semibold text-[var(--text-primary)]">
               <Smartphone className="h-3.5 w-3.5" />
-              <span>Android Application · v{ASTERIAL_BRAND.semver}</span>
+              <span>Dedicated React Native Android Release</span>
+              <span>·</span>
+              <span>v{release.semver}</span>
             </div>
 
-            <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-5xl">
+            <h1 className="mt-5 font-display text-3xl font-bold tracking-tight sm:text-5xl">
               {ASTERIAL_BRAND.name} for Android
             </h1>
-
-            <p className="text-sm sm:text-base text-zinc-400 leading-relaxed">
-              Sign in with the exact same {ASTERIAL_BRAND.name} account on your
-              Android phone, tablet, or desktop browser. Conversations, groups,
-              private media attachments, and read states stay synchronized in
-              real time across every surface.
+            <p className="mt-4 max-w-2xl text-base leading-relaxed text-[var(--text-secondary)]">
+              Install the dedicated React Native 0.83{" "}
+              <strong className="font-semibold text-[var(--text-primary)]">
+                {ASTERIAL_BRAND.name} v{release.version}
+              </strong>{" "}
+              Android application. Launches directly into native authentication
+              and syncs real-time 1:1 and group conversations, private media
+              attachments, reactions, receipts, and privacy preferences with{" "}
+              <span className="font-mono text-xs text-[var(--text-primary)]">
+                asterial.vercel.app
+              </span>{" "}
+              — with zero WebViews.
             </p>
 
-            <div className="grid gap-3 pt-2 sm:grid-cols-3 text-xs">
-              <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3.5">
-                <p className="text-zinc-500">Application ID</p>
-                <p className="mt-1 font-mono font-medium text-white">
-                  {ASTERIAL_BRAND.androidPackageId}
-                </p>
-              </div>
-              <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3.5">
-                <p className="text-zinc-500">Current Version</p>
-                <p className="mt-1 font-mono font-medium text-white">
-                  {ASTERIAL_BRAND.semver} (Code {ASTERIAL_BRAND.versionCode})
-                </p>
-              </div>
-              <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3.5">
-                <p className="text-zinc-500">Artifact Format</p>
-                <p className="mt-1 font-mono font-medium text-white truncate">
-                  {apkName}
-                </p>
-              </div>
-            </div>
-          </section>
+            {release.tagReleasePublished && release.verifiedApkDownloadUrl ? (
+              <div className="mt-8 flex flex-wrap items-center gap-3.5">
+                <a
+                  href={release.verifiedApkDownloadUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2.5 rounded-2xl bg-white px-6 py-3.5 text-sm font-semibold text-zinc-950 shadow-lg transition hover:bg-zinc-200"
+                >
+                  Download {release.apkFileName}
+                  {release.verifiedApkSizeBytes
+                    ? ` (${formatBytes(release.verifiedApkSizeBytes)})`
+                    : ""}
+                </a>
 
-          {/* Live Release & Update Checker */}
-          <section aria-label="Release checker">
-            <AppUpdatePanel />
-          </section>
-
-          {/* Installation & Architecture Cards */}
-          <section className="grid gap-6 md:grid-cols-2">
-            <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-6 space-y-4">
-              <div className="flex items-center gap-2.5">
-                <ShieldCheck className="h-5 w-5 text-zinc-200" />
-                <h2 className="text-base font-semibold text-white">
-                  Android Installation Steps
-                </h2>
-              </div>
-              <ol className="list-decimal pl-4 space-y-2.5 text-xs text-zinc-300 leading-relaxed">
-                <li>
-                  Download the official APK (<code className="font-mono">{apkName}</code>)
-                  from the verified{" "}
+                {release.verifiedChecksumUrl ? (
                   <a
-                    href={ASTERIAL_BRAND.githubReleasesUrl}
+                    href={release.verifiedChecksumUrl}
                     target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline text-white"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-elevated)] px-5 py-3.5 text-sm font-semibold text-[var(--text-primary)] transition hover:border-[var(--accent)]/40"
                   >
-                    GitHub Releases
-                  </a>{" "}
-                  page or the latest successful{" "}
-                  <a
-                    href={`${ASTERIAL_BRAND.githubActionsUrl}/workflows/android-release.yml`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline text-white"
-                  >
-                    Android Release CI run
+                    SHA-256 Checksum
                   </a>
-                  .
-                </li>
-                <li>
-                  Optional integrity check: compare the downloaded file against
-                  the accompanying <code className="font-mono">.sha256</code>{" "}
-                  checksum published in the build artifact.
-                </li>
-                <li>
-                  Open the APK on Android 8.0+ (API 26+). When prompted by
-                  Android&apos;s security controls, allow installation from your
-                  browser or file manager.
-                </li>
-                <li>
-                  Launch <strong>{ASTERIAL_BRAND.name}</strong> and sign in with
-                  your existing credentials.
-                </li>
-              </ol>
+                ) : null}
+
+                <a
+                  href={release.verifiedReleaseHtmlUrl || release.githubReleasesUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 rounded-2xl border border-[var(--border-subtle)] px-5 py-3.5 text-sm font-medium text-[var(--text-secondary)] transition hover:text-[var(--text-primary)]"
+                >
+                  Release Notes ({release.expectedTag})
+                </a>
+              </div>
+            ) : (
+              <div className="mt-8 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)]/70 p-5">
+                <div className="flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
+                  <ShieldCheck className="h-4 w-4 text-[var(--accent)]" />
+                  <span>
+                    Tag {release.expectedTag} release status: Awaiting official
+                    Git tag publication
+                  </span>
+                </div>
+                <p className="mt-1.5 text-xs leading-relaxed text-[var(--text-secondary)]">
+                  {ASTERIAL_BRAND.name} never serves unverified or mismatched APK
+                  links. Pushing Git tag{" "}
+                  <span className="font-mono text-[var(--text-primary)]">
+                    {release.expectedTag}
+                  </span>{" "}
+                  triggers GitHub Actions to compile{" "}
+                  <span className="font-mono text-[var(--text-primary)]">
+                    {release.apkFileName}
+                  </span>
+                  , verify its embedded Hermes bundle and signature, generate its{" "}
+                  <span className="font-mono text-[var(--text-primary)]">
+                    .sha256
+                  </span>{" "}
+                  digest, and publish it directly to GitHub Releases.
+                </p>
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <a
+                    href={release.githubReleasesUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-xs font-semibold text-zinc-950 transition hover:bg-zinc-200"
+                  >
+                    Open GitHub Releases
+                  </a>
+                  {release.latestPublishedTag && release.latestPublishedUrl ? (
+                    <a
+                      href={release.latestPublishedUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-2 rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-surface)] px-4 py-3 text-xs font-semibold text-[var(--text-primary)] transition hover:border-[var(--accent)]/40"
+                    >
+                      Previous Published Tag ({release.latestPublishedTag})
+                    </a>
+                  ) : null}
+                </div>
+              </div>
+            )}
+
+            <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)]/70 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                  Application ID
+                </p>
+                <p className="mt-1 font-mono text-xs text-[var(--text-primary)]">
+                  {release.androidPackageId}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)]/70 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                  Release Version
+                </p>
+                <p className="mt-1 font-mono text-xs text-[var(--text-primary)]">
+                  {release.semver} (versionCode {release.versionCode}+)
+                </p>
+              </div>
+              <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)]/70 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                  Signing Verification
+                </p>
+                <p className="mt-1 text-xs font-medium text-[var(--text-primary)]">
+                  {release.signingStatus === "production-keystore"
+                    ? "Production Keystore (V1/V2/V3)"
+                    : release.signingStatus === "debug-signed"
+                    ? "Debug-Signed Standalone APK"
+                    : `Verified on ${release.expectedTag} Tag`}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)]/70 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                  Official Developer
+                </p>
+                <p className="mt-1 text-xs font-medium text-[var(--text-primary)]">
+                  {release.developer} · {release.attribution}
+                </p>
+              </div>
             </div>
 
-            <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-6 space-y-4">
-              <div className="flex items-center gap-2.5">
-                <GitBranch className="h-5 w-5 text-zinc-200" />
-                <h2 className="text-base font-semibold text-white">
-                  Unified Web + APK Update Architecture
-                </h2>
+            <div className="mt-8 space-y-2.5 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)]/50 p-5">
+              <div className="flex items-center gap-2 font-mono text-xs text-zinc-300">
+                <Terminal className="h-4 w-4" />
+                <span>Verify APK Checksum (macOS / Linux / PowerShell)</span>
               </div>
-              <div className="space-y-3 text-xs text-zinc-300 leading-relaxed">
-                <div className="flex items-start gap-2.5">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400 mt-0.5" />
-                  <p>
-                    <strong>Shared Live Backend:</strong> Both the website and
-                    Android app connect to the same Supabase PostgreSQL,
-                    Realtime, Auth, and private Storage project.
-                  </p>
-                </div>
-                <div className="flex items-start gap-2.5">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400 mt-0.5" />
-                  <p>
-                    <strong>Dedicated Native Frontend:</strong> Built with React
-                    Native + TypeScript and rendered via native Android Views
-                    (never a WebView or iframe wrapper), sharing{" "}
-                    <code className="font-mono">@asterial/core</code> validation
-                    and domain models with the Next.js web application.
-                  </p>
-                </div>
-                <div className="flex items-start gap-2.5">
-                  <Lock className="h-4 w-4 shrink-0 text-zinc-300 mt-0.5" />
-                  <p>
-                    <strong>Automated APK Builds:</strong> Compiled via Gradle
-                    + Hermes in GitHub Actions with monotonic{" "}
-                    <code className="font-mono">versionCode</code> increments
-                    and SHA-256 checksums.
-                  </p>
-                </div>
-              </div>
+              <pre className="overflow-x-auto rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-void)] p-3.5 font-mono text-xs text-zinc-300">
+                {`sha256sum -c ${release.apkFileName}.sha256`}
+              </pre>
             </div>
-          </section>
+          </div>
 
-          {/* Checksum Verification Reference */}
-          <section className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-6 space-y-3">
-            <div className="flex items-center gap-2 font-mono text-xs text-zinc-300">
-              <Terminal className="h-4 w-4" />
-              <span>Verify APK Checksum (macOS / Linux / PowerShell)</span>
-            </div>
-            <pre className="overflow-x-auto rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-void)] p-3.5 font-mono text-xs text-zinc-300">
-              {`sha256sum -c ${apkName}.sha256`}
-            </pre>
-          </section>
+          <AppUpdatePanel />
         </div>
       </main>
 
