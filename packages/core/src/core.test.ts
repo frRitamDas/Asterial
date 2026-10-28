@@ -34,7 +34,7 @@ describe("@asterial/core shared cross-platform domain package (v1.4.2)", () => {
     assert.equal(ASTERIAL_BRAND.name, "ASTERIAL");
     assert.equal(ASTERIAL_BRAND.version, "1.4.2");
     assert.equal(ASTERIAL_BRAND.semver, "1.4.2");
-    assert.equal(ASTERIAL_BRAND.versionCode, 14000);
+    assert.equal(ASTERIAL_BRAND.versionCode, 14200);
     assert.equal(ASTERIAL_BRAND.developer, "Ritam Das");
     assert.equal(ASTERIAL_BRAND.attribution, "By X Huracan");
     assert.equal(ASTERIAL_BRAND.androidPackageId, "com.xhuracan.asterial");

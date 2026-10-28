@@ -16,7 +16,7 @@ describe("ASTERIAL format utilities & brand constants", () => {
     assert.equal(ASTERIAL_BRAND.name, "ASTERIAL");
     assert.equal(ASTERIAL_BRAND.version, "1.4.2");
     assert.equal(ASTERIAL_BRAND.semver, "1.4.2");
-    assert.equal(ASTERIAL_BRAND.versionCode, 14000);
+    assert.equal(ASTERIAL_BRAND.versionCode, 14200);
     assert.equal(ASTERIAL_BRAND.androidPackageId, "com.xhuracan.asterial");
     assert.equal(ASTERIAL_BRAND.developer, "Ritam Das");
     assert.equal(ASTERIAL_BRAND.attribution, "By X Huracan");
