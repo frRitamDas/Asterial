@@ -14,8 +14,8 @@ import { ASTERIAL_BRAND } from "../constants/brand";
 describe("ASTERIAL format utilities & brand constants", () => {
   it("exposes official centralized brand & version metadata from version.json", () => {
     assert.equal(ASTERIAL_BRAND.name, "ASTERIAL");
-    assert.equal(ASTERIAL_BRAND.version, "1.4.0");
-    assert.equal(ASTERIAL_BRAND.semver, "1.4.0");
+    assert.equal(ASTERIAL_BRAND.version, "1.4.2");
+    assert.equal(ASTERIAL_BRAND.semver, "1.4.2");
     assert.equal(ASTERIAL_BRAND.versionCode, 14000);
     assert.equal(ASTERIAL_BRAND.androidPackageId, "com.xhuracan.asterial");
     assert.equal(ASTERIAL_BRAND.developer, "Ritam Das");
