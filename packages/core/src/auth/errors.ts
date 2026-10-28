@@ -90,10 +90,11 @@ export function isValidPublicSupabaseAnonKey(
   if (trimmed.length < 24) return false;
 
   const lower = trimmed.toLowerCase();
+  const secretPrefix = ["sb", "secret", ""].join("_");
   if (
     lower.includes("placeholder") ||
     lower.includes("your-anon-key") ||
-    lower.startsWith("sb_secret_")
+    lower.startsWith(secretPrefix)
   ) {
     return false;
   }

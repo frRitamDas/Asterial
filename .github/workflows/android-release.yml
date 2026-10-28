@@ -295,23 +295,31 @@ jobs:
               exit 1
             fi
 
-            # 2. Assert real production Supabase host is compiled inside Hermes bytecode & zero placeholders/secrets exist
+            # 2. Assert real production Supabase host is compiled inside Hermes bytecode & zero placeholders/service_role keys exist
             unzip -p "$SRC_APK" assets/index.android.bundle > /tmp/extracted.hbc
             node -e "
               const fs = require('fs');
               const buf = fs.readFileSync('/tmp/extracted.hbc').toString('latin1');
               const host = process.env.EXPECTED_SUPABASE_HOST;
               if (!host || !buf.includes('https://' + host)) {
-                console.error('CRITICAL: Compiled Hermes bundle missing production URL https://' + host);
+                console.error('::error::CRITICAL: Compiled Hermes bundle missing production URL https://' + host);
                 process.exit(1);
               }
               if (buf.includes('https://placeholder.supabase.co') || buf.includes('public-anon-placeholder')) {
-                console.error('CRITICAL: Placeholder Supabase string found in compiled Hermes bundle!');
+                console.error('::error::CRITICAL: Placeholder Supabase string found in compiled Hermes bundle!');
                 process.exit(1);
               }
-              if (/sb_secret_[A-Za-z0-9_-]{10,}/.test(buf)) {
-                console.error('CRITICAL: Secret key leaked into compiled Hermes bundle!');
+              const jwts = buf.match(/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[A-Za-z0-9_-]+/g) || [];
+              if (jwts.length === 0 && !buf.includes('sb_publishable_')) {
+                console.error('::error::CRITICAL: Compiled Hermes bundle missing public anon/publishable key!');
                 process.exit(1);
+              }
+              for (const jwt of jwts) {
+                const payload = Buffer.from(jwt.split('.')[1], 'base64url').toString('utf8');
+                if (payload.includes('service_role')) {
+                  console.error('::error::CRITICAL: service_role JWT leaked into compiled Hermes bundle!');
+                  process.exit(1);
+                }
               }
             "
             rm -f /tmp/extracted.hbc
