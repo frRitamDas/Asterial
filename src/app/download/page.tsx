@@ -94,9 +94,7 @@ export default async function DownloadPage() {
                   ) : null}
 
                   <a
-                    href={release.verifiedReleaseHtmlUrl || release.githubReleasesUrl}
-                    target="_blank"
-                    rel="noreferrer"
+                    href="#release-highlights"
                     className="inline-flex items-center gap-2 rounded-2xl border border-[var(--border-subtle)] px-5 py-3.5 text-sm font-medium text-[var(--text-secondary)] transition hover:text-[var(--text-primary)]"
                   >
                     Release Notes ({release.expectedTag})
@@ -135,46 +133,22 @@ export default async function DownloadPage() {
                 <div className="flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
                   <ShieldCheck className="h-4 w-4 text-[var(--accent-signal)]" />
                   <span>
-                    Tag {release.expectedTag} release status: Awaiting official
-                    Git tag publication
+                    Release {release.expectedTag} status: Preparing verified Android build
                   </span>
                 </div>
                 <p className="mt-1.5 text-xs leading-relaxed text-[var(--text-secondary)]">
                   {ASTERIAL_BRAND.name} never advertises unverified or unpublished
-                  APK links as available. Pushing Git tag{" "}
-                  <span className="font-mono text-[var(--text-primary)]">
-                    {release.expectedTag}
-                  </span>{" "}
-                  triggers GitHub Actions to compile universal + multi-ABI APKs
-                  (<span className="font-mono">arm64-v8a</span>,{" "}
+                  APK links as available. Once the automated release pipeline finishes
+                  compiling universal and multi-ABI APKs (
+                  <span className="font-mono">arm64-v8a</span>,{" "}
                   <span className="font-mono">armeabi-v7a</span>,{" "}
-                  <span className="font-mono">x86_64</span>), verify their
-                  embedded Hermes bundle and signatures, compute{" "}
+                  <span className="font-mono">x86_64</span>), verifying their
+                  embedded Hermes bundle and signatures, and computing{" "}
                   <span className="font-mono text-[var(--text-primary)]">
                     .sha256
                   </span>{" "}
-                  digests, and publish them directly to GitHub Releases.
+                  digests, direct download buttons appear right on this page.
                 </p>
-                <div className="mt-4 flex flex-wrap items-center gap-3">
-                  <a
-                    href={release.githubReleasesUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-xs font-semibold text-zinc-950 transition hover:bg-zinc-200"
-                  >
-                    Open GitHub Releases
-                  </a>
-                  {release.latestPublishedTag && release.latestPublishedUrl ? (
-                    <a
-                      href={release.latestPublishedUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-2 rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-surface)] px-4 py-3 text-xs font-semibold text-[var(--text-primary)] transition hover:border-white/30"
-                    >
-                      Previous Published Tag ({release.latestPublishedTag})
-                    </a>
-                  ) : null}
-                </div>
               </div>
             )}
 
@@ -228,7 +202,9 @@ export default async function DownloadPage() {
             </div>
           </div>
 
-          <AppUpdatePanel />
+          <div id="release-highlights">
+            <AppUpdatePanel />
+          </div>
         </div>
       </main>
 

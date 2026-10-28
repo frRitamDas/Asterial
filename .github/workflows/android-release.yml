@@ -24,7 +24,7 @@ permissions:
 
 concurrency:
   group: asterial-android-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/v') && github.ref != 'refs/heads/main' }}
 
 env:
   NODE_VERSION: "22"
@@ -130,6 +130,17 @@ jobs:
             echo "release_tag=${TARGET_TAG}" >> "$GITHUB_OUTPUT"
             echo "Mode: Manual Official Release (${TARGET_TAG})."
             exit 0
+          fi
+
+          if [ "$EVENT_NAME" = "push" ] && [ "$GIT_REF" = "refs/heads/main" ]; then
+            AUTO_TAG="v${MANIFEST_VERSION}"
+            if ! gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${AUTO_TAG}" >/dev/null 2>&1; then
+              echo "build_mode=official-release" >> "$GITHUB_OUTPUT"
+              echo "should_publish_release=true" >> "$GITHUB_OUTPUT"
+              echo "release_tag=${AUTO_TAG}" >> "$GITHUB_OUTPUT"
+              echo "Mode: Official Main-Branch Release (${AUTO_TAG}) — no release published yet for version.json (${MANIFEST_VERSION}); will publish verified APKs to GitHub Releases."
+              exit 0
+            fi
           fi
 
           echo "build_mode=ci-build" >> "$GITHUB_OUTPUT"
@@ -457,52 +468,58 @@ jobs:
             exit 1
           fi
 
-          HIGHLIGHTS=$(node -e "
-            const v = require('../version.json');
-            console.log((v.releaseNotes || []).map(n => '- ' + n).join('\n'));
-          ")
-
-          ABI_TABLE=$(node -e "
-            const fs = require('fs');
-            const m = JSON.parse(fs.readFileSync('asterial-android-${SEMVER}.manifest.json', 'utf8'));
-            for (const a of m.artifacts) {
-              const mb = (a.bytes / (1024 * 1024)).toFixed(1) + ' MB';
-              console.log('| \`' + a.filename + '\` | ' + mb + ' | \`' + a.sha256 + '\` |');
-            }
-          ")
-
-          if [ "$SIGNING_MODE" = "production-keystore" ]; then
-            SIGNING_LINE="Production keystore signed (Android V1 / V2 / V3)"
-          else
-            SIGNING_LINE="Debug-signed standalone APK (test artifact — NOT signed with a production release keystore; configure ANDROID_KEYSTORE_* repository secrets for Play Protect production signing)"
-          fi
-
-          cat <<EOF > release-notes.md
-          ## ASTERIAL v${SEMVER} — Full-Stack Monochrome Overhaul, Auth Repair & Social Expansion
-
-          - **Application ID:** \`com.xhuracan.asterial\`
-          - **Semantic Version:** \`${SEMVER}\` (\`versionCode\`: \`${VERSION_CODE}\`)
-          - **Architecture:** Dedicated React Native \`0.83.10\` (Fabric + Hermes bytecode, zero WebView)
-          - **Signing Status:** ${SIGNING_LINE}
-          - **Commit SHA:** \`${GITHUB_SHA}\`
-          - **Official Developer:** Ritam Das · **By X Huracan**
-
-          ### Release Highlights
-          ${HIGHLIGHTS}
-
-          ### Verified APK Artifacts & SHA-256 Checksums
-          | APK File | Size | SHA-256 |
-          | --- | --- | --- |
-          ${ABI_TABLE}
-
-          ### Verification & Installation (Android 8.0 / API 26+)
-          1. Download **\`${APK_FILE}\`** (Universal) or **\`asterial-android-${SEMVER}-arm64-v8a...\`.apk** (modern 64-bit phones).
-          2. Verify integrity against its \`.sha256\` checksum file:
-             \`\`\`bash
-             echo "${SHA256_VAL}  ${APK_FILE}" | sha256sum -c
-             \`\`\`
-          3. Open the APK on your Android device to install and sign in directly to ASTERIAL.
-          EOF
+          node -e '
+            const fs = require("fs");
+            const v = require("../version.json");
+            const semver = process.env.SEMVER;
+            const versionCode = process.env.VERSION_CODE;
+            const apkFile = process.env.APK_FILE;
+            const sha256Val = process.env.SHA256_VAL;
+            const signingMode = process.env.SIGNING_MODE;
+            const sha = process.env.GITHUB_SHA;
+            const m = JSON.parse(fs.readFileSync(`asterial-android-${semver}.manifest.json`, "utf8"));
+            const highlights = (v.releaseNotes || []).map((n) => `- ${n}`).join("\n");
+            const abiTable = m.artifacts
+              .map((a) => {
+                const mb = (a.bytes / (1024 * 1024)).toFixed(1) + " MB";
+                return `| \`${a.filename}\` | ${mb} | \`${a.sha256}\` |`;
+              })
+              .join("\n");
+            const signingLine =
+              signingMode === "production-keystore"
+                ? "Production keystore signed (Android V1 / V2 / V3)"
+                : "Debug-signed standalone APK (test artifact — NOT signed with a production release keystore; configure ANDROID_KEYSTORE_* repository secrets for Play Protect production signing)";
+            const arm64Entry = m.artifacts.find((a) => a.filename.includes("arm64-v8a"));
+            const arm64Name = arm64Entry ? arm64Entry.filename : `asterial-android-${semver}-arm64-v8a.apk`;
+            const notes = [
+              `## ASTERIAL v${semver} — Communication-First Monochrome Workspace (Web & Native Android)`,
+              "",
+              `- **Application ID:** \`com.xhuracan.asterial\``,
+              `- **Semantic Version:** \`${semver}\` (\`versionCode\`: \`${versionCode}\`)`,
+              `- **Architecture:** Dedicated React Native \`0.83.10\` (Fabric + Hermes bytecode, zero WebView)`,
+              `- **Signing Status:** ${signingLine}`,
+              `- **Commit SHA:** \`${sha}\``,
+              `- **Official Developer:** Ritam Das · **By X Huracan**`,
+              "",
+              "### Release Highlights",
+              highlights,
+              "",
+              "### Verified APK Artifacts & SHA-256 Checksums",
+              "| APK File | Size | SHA-256 |",
+              "| --- | --- | --- |",
+              abiTable,
+              "",
+              "### Verification & Installation (Android 8.0 / API 26+)",
+              `1. Download **\`${apkFile}\`** (Universal) or **\`${arm64Name}\`** (modern 64-bit phones).`,
+              "2. Verify integrity against its `.sha256` checksum file:",
+              "   ```bash",
+              `   echo "${sha256Val}  ${apkFile}" | sha256sum -c`,
+              "   ```",
+              "3. Open the APK on your Android device to install and sign in directly to ASTERIAL.",
+              "",
+            ].join("\n");
+            fs.writeFileSync("release-notes.md", notes, "utf8");
+          '
 
           VERIFY_TAG_FLAG=()
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then

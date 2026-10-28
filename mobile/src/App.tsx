@@ -31,10 +31,10 @@ import { ProfileScreen } from "./screens/ProfileScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
 
 const BOTTOM_TABS: { key: MainTabKey; label: string; glyph: string }[] = [
-  { key: "chats", label: "Chats", glyph: "💬" },
-  { key: "orbits", label: "Orbits", glyph: "◎" },
-  { key: "moments", label: "Moments", glyph: "◷" },
-  { key: "feed", label: "Feed", glyph: "▤" },
+  { key: "chats", label: "Chats", glyph: "◉" },
+  { key: "orbits", label: "Orbits", glyph: "⌘" },
+  { key: "moments", label: "Moments", glyph: "◌" },
+  { key: "feed", label: "Feed", glyph: "▦" },
   { key: "contacts", label: "People", glyph: "⌕" },
 ];
 
@@ -556,17 +556,18 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: "row",
     borderTopWidth: 1,
-    paddingHorizontal: 6,
-    paddingVertical: 6,
-    gap: 4,
+    paddingHorizontal: 10,
+    paddingTop: 9,
+    paddingBottom: 8,
+    gap: 5,
   },
   tabItem: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 7,
-    borderRadius: 12,
-    gap: 2,
+    paddingVertical: 8,
+    borderRadius: 15,
+    gap: 4,
   },
   tabIconWrap: {
     position: "relative",
@@ -574,7 +575,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   tabGlyph: {
-    fontSize: 15,
+    fontSize: 19,
+    fontWeight: "500",
   },
   tabBadge: {
     position: "absolute",
@@ -593,5 +595,6 @@ const styles = StyleSheet.create({
   },
   tabLabel: {
     fontSize: 10.5,
+    letterSpacing: 0.05,
   },
 });

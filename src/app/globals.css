@@ -251,3 +251,81 @@ body {
   transition-duration: 0.01ms !important;
   scroll-behavior: auto !important;
 }
+
+
+/* ASTERIAL 1.4.2 — communication-first product surface */
+:root {
+  --radius-control: 14px;
+  --radius-card: 20px;
+  --radius-panel: 26px;
+  --ease-asterial: cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+html {
+  scroll-behavior: smooth;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  letter-spacing: -0.012em;
+  background: var(--bg-canvas);
+}
+
+button, input, textarea, select {
+  font: inherit;
+}
+
+button, [role="button"], a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+a {
+  text-underline-offset: 4px;
+}
+
+::selection {
+  color: var(--bubble-out-fg);
+  background: var(--bubble-out-bg);
+}
+
+/* Consistent controls without imposing a heavy glass effect on every surface. */
+.asterial-surface-card {
+  border-radius: var(--radius-card);
+  transition: border-color 180ms var(--ease-asterial),
+    background-color 180ms var(--ease-asterial),
+    transform 180ms var(--ease-asterial);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .asterial-surface-card:hover {
+    border-color: var(--border-strong);
+  }
+}
+
+input, textarea, select {
+  min-width: 0;
+}
+
+input::placeholder, textarea::placeholder {
+  opacity: 0.72;
+}
+
+:focus-visible {
+  outline-offset: 3px;
+}
+
+@keyframes asterialRise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-asterial-rise {
+  animation: asterialRise 360ms var(--ease-asterial) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .animate-asterial-rise { animation: none; }
+}

@@ -651,7 +651,7 @@ export function SettingsScreen() {
               onPress={() =>
                 void Linking.openURL(
                   liveRelease.verifiedApkDownloadUrl ||
-                    liveRelease.githubReleasesUrl
+                    `${ASTERIAL_BRAND.productionUrl}/download`
                 )
               }
               style={[
@@ -666,9 +666,7 @@ export function SettingsScreen() {
           ) : (
             <Pressable
               onPress={() =>
-                void Linking.openURL(
-                  `https://github.com/${ASTERIAL_BRAND.githubRepo}/releases`
-                )
+                void Linking.openURL(`${ASTERIAL_BRAND.productionUrl}/download`)
               }
               style={[
                 styles.secondaryActionBtn,
@@ -680,7 +678,7 @@ export function SettingsScreen() {
               ]}
             >
               <Text style={{ color: palette.textPrimary, fontWeight: "700" }}>
-                View Official GitHub Releases
+                Open Official Download Center
               </Text>
             </Pressable>
           )}

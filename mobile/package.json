@@ -1,6 +1,6 @@
 {
   "name": "asterial-mobile",
-  "version": "1.4.0",
+  "version": "1.4.2",
   "private": true,
   "description": "ASTERIAL Native Android Application (React Native + TypeScript) — Official Developer: Ritam Das | By X Huracan.",
   "scripts": {
