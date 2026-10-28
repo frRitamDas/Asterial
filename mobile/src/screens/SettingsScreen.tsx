@@ -20,7 +20,6 @@ import {
   type PresenceVisibility,
   type ProfileRow,
 } from "@asterial/core";
-import { BrandLockup } from "../components/AsterialEmblem";
 import { useMobileWorkspace } from "../context/MobileWorkspaceContext";
 
 const THEME_OPTIONS: AppearanceTheme[] = [
@@ -192,11 +191,14 @@ export function SettingsScreen() {
           { borderBottomColor: palette.borderSubtle },
         ]}
       >
-        <BrandLockup
-          palette={palette}
-          compact
-          subtitle="Appearance, Privacy & Release"
-        />
+        <View style={styles.screenHeading}>
+          <Text style={[styles.screenTitle, { color: palette.textPrimary }]}>
+            Settings
+          </Text>
+          <Text style={[styles.screenSubtitle, { color: palette.textMuted }]}>
+            Appearance, privacy & release
+          </Text>
+        </View>
       </View>
 
       <ScrollView
@@ -756,9 +758,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   topBar: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 18,
     paddingVertical: 12,
     borderBottomWidth: 1,
+  },
+  screenHeading: {
+    gap: 2,
+  },
+  screenTitle: {
+    fontSize: 19,
+    lineHeight: 24,
+    fontWeight: "800",
+    letterSpacing: -0.35,
+  },
+  screenSubtitle: {
+    fontSize: 11.5,
+    lineHeight: 15,
+    fontWeight: "500",
   },
   scrollContent: {
     padding: 16,
