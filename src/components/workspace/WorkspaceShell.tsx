@@ -1,11 +1,14 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Aperture,
   Compass,
+  Globe,
   Layers,
+  LayoutList,
   LogOut,
   MessageSquare,
   Search,
@@ -23,7 +26,7 @@ import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { cn } from "@/lib/utils/cn";
 import { ASTERIAL_BRAND } from "@/lib/constants/brand";
 
-const NAV_ITEMS = [
+const DESKTOP_NAV_ITEMS = [
   {
     href: "/app/chats",
     matchPrefix: "/app/chats",
@@ -37,9 +40,27 @@ const NAV_ITEMS = [
     icon: Layers,
   },
   {
+    href: "/app/orbits",
+    matchPrefix: "/app/orbits",
+    label: "Orbits",
+    icon: Globe,
+  },
+  {
+    href: "/app/moments",
+    matchPrefix: "/app/moments",
+    label: "Moments",
+    icon: Aperture,
+  },
+  {
+    href: "/app/feed",
+    matchPrefix: "/app/feed",
+    label: "Feed",
+    icon: LayoutList,
+  },
+  {
     href: "/app/contacts",
     matchPrefix: "/app/contacts",
-    label: "Contacts",
+    label: "People",
     icon: Compass,
   },
   {
@@ -47,6 +68,45 @@ const NAV_ITEMS = [
     matchPrefix: "/app/profile",
     label: "Profile",
     icon: UserCircle,
+  },
+  {
+    href: "/app/settings",
+    matchPrefix: "/app/settings",
+    label: "Settings",
+    icon: Settings,
+  },
+] as const;
+
+const MOBILE_NAV_ITEMS = [
+  {
+    href: "/app/chats",
+    matchPrefix: "/app/chats",
+    label: "Chats",
+    icon: MessageSquare,
+  },
+  {
+    href: "/app/orbits",
+    matchPrefix: "/app/orbits",
+    label: "Orbits",
+    icon: Globe,
+  },
+  {
+    href: "/app/moments",
+    matchPrefix: "/app/moments",
+    label: "Moments",
+    icon: Aperture,
+  },
+  {
+    href: "/app/feed",
+    matchPrefix: "/app/feed",
+    label: "Feed",
+    icon: LayoutList,
+  },
+  {
+    href: "/app/contacts",
+    matchPrefix: "/app/contacts",
+    label: "People",
+    icon: Compass,
   },
   {
     href: "/app/settings",
@@ -66,9 +126,22 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
     signOut,
   } = useWorkspace();
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setActiveModal("search");
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [setActiveModal]);
+
   const isChatsSection = pathname.startsWith("/app/chats");
   const isActiveChatThread =
     pathname.startsWith("/app/chats/") && pathname !== "/app/chats";
+  const isActiveOrbitThread =
+    pathname.startsWith("/app/orbits/") && pathname !== "/app/orbits";
 
   return (
     <div className="flex h-dvh w-full flex-col overflow-hidden bg-[var(--bg-canvas)]">
@@ -76,7 +149,7 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
       {!isNetworkOnline && (
         <div
           role="status"
-          className="flex items-center justify-center gap-2 border-b border-amber-500/30 bg-amber-500/10 px-4 py-1.5 text-xs text-amber-200"
+          className="flex items-center justify-center gap-2 border-b border-white/15 bg-[var(--bg-elevated)] px-4 py-1.5 text-xs text-zinc-200"
         >
           <WifiOff className="h-3.5 w-3.5 shrink-0" />
           <span>
@@ -92,29 +165,29 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
           aria-label="Workspace navigation"
           className="hidden md:flex w-[68px] shrink-0 flex-col items-center justify-between border-r border-[var(--border-subtle)] bg-[var(--bg-void)] py-4"
         >
-          <div className="flex flex-col items-center gap-4">
+          <div className="flex flex-col items-center gap-3">
             <Link
               href="/app/chats"
               title={`${ASTERIAL_BRAND.name} v${ASTERIAL_BRAND.version}`}
               className="rounded-xl p-1 hover:opacity-90 transition-opacity"
             >
-              <AsterialMark size={34} />
+              <AsterialMark size={32} />
             </Link>
 
             <button
               type="button"
               onClick={() => setActiveModal("search")}
-              title="Search messages & chats (⌘K)"
+              title="Search messages & people (⌘K)"
               aria-label="Search messages and conversations"
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-zinc-400 hover:bg-white/[0.08] hover:text-white transition-colors cursor-pointer"
+              className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-zinc-400 hover:bg-white/[0.08] hover:text-white transition-colors cursor-pointer"
             >
               <Search className="h-4 w-4" />
             </button>
 
             <div className="h-px w-7 bg-white/[0.08]" />
 
-            <div className="flex flex-col items-center gap-1.5">
-              {NAV_ITEMS.map((item) => {
+            <div className="flex flex-col items-center gap-1">
+              {DESKTOP_NAV_ITEMS.map((item) => {
                 const Icon = item.icon;
                 const active = pathname.startsWith(item.matchPrefix);
                 const showBadge =
@@ -128,13 +201,13 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
                     aria-label={item.label}
                     aria-current={active ? "page" : undefined}
                     className={cn(
-                      "relative flex h-10 w-10 items-center justify-center rounded-xl transition-colors",
+                      "relative flex h-9 w-9 items-center justify-center rounded-xl transition-colors",
                       active
                         ? "bg-white text-zinc-950"
                         : "text-zinc-400 hover:bg-white/[0.06] hover:text-white"
                     )}
                   >
-                    <Icon className="h-4.5 w-4.5" />
+                    <Icon className="h-4 w-4" />
                     {showBadge && (
                       <span
                         className={cn(
@@ -153,7 +226,7 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          <div className="flex flex-col items-center gap-3">
+          <div className="flex flex-col items-center gap-2.5">
             {profile && (
               <Link
                 href="/app/profile"
@@ -163,7 +236,9 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
                   name={profile.display_name}
                   avatarPath={profile.avatar_url}
                   size="sm"
-                  online={isNetworkOnline && profile.presence_visibility !== "nobody"}
+                  online={
+                    isNetworkOnline && profile.presence_visibility !== "nobody"
+                  }
                   showPresence
                 />
               </Link>
@@ -201,13 +276,13 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
         </main>
       </div>
 
-      {/* Mobile Bottom Navigation (Hidden inside active full-screen chat view) */}
-      {!isActiveChatThread && (
+      {/* Mobile Bottom Navigation (Hidden inside active full-screen chat or Orbit room) */}
+      {!isActiveChatThread && !isActiveOrbitThread && (
         <nav
           aria-label="Mobile navigation"
-          className="flex md:hidden items-center justify-around border-t border-[var(--border-subtle)] bg-[var(--bg-void)] px-2 pt-1.5 pb-1.5 pb-safe"
+          className="flex md:hidden items-center justify-around border-t border-[var(--border-subtle)] bg-[var(--bg-void)] px-1 pt-1.5 pb-1.5 pb-safe"
         >
-          {NAV_ITEMS.map((item) => {
+          {MOBILE_NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const active = pathname.startsWith(item.matchPrefix);
             const showBadge =
@@ -219,14 +294,14 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "relative flex min-h-[44px] min-w-[56px] flex-col items-center justify-center gap-0.5 rounded-xl px-2.5 py-1 text-[10px] font-medium transition-colors",
+                  "relative flex min-h-[44px] min-w-[48px] flex-col items-center justify-center gap-0.5 rounded-xl px-2 py-1 text-[10px] font-medium transition-colors",
                   active ? "text-white" : "text-zinc-500 hover:text-zinc-300"
                 )}
               >
-                <Icon className="h-4.5 w-4.5" />
+                <Icon className="h-4 w-4" />
                 <span>{item.label}</span>
                 {showBadge && (
-                  <span className="absolute right-1.5 top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-white px-1 font-mono text-[9px] font-bold text-zinc-950">
+                  <span className="absolute right-1 top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-white px-1 font-mono text-[9px] font-bold text-zinc-950">
                     {totalUnreadCount > 99 ? "99+" : totalUnreadCount}
                   </span>
                 )}

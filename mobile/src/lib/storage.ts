@@ -10,6 +10,11 @@ import {
 import { getActiveSupabaseConfig } from "./supabase";
 import { createClientUuid } from "./uuid";
 
+export type PrivateStorageBucket =
+  | "avatars"
+  | "chat-attachments"
+  | "social-media";
+
 const SIGNED_URL_TTL_SECONDS = 60 * 60; // 1 hour
 const CACHE_EXPIRY_BUFFER_MS = 10 * 60 * 1000; // Refresh 10m before expiry
 
@@ -30,7 +35,7 @@ export function clearSignedUrlCache(): void {
 }
 
 export function getCachedSignedUrl(
-  bucket: "avatars" | "chat-attachments",
+  bucket: PrivateStorageBucket,
   storagePath: string | null | undefined
 ): string | null {
   if (!storagePath) return null;
@@ -44,7 +49,7 @@ export function getCachedSignedUrl(
 
 export async function resolvePrivateSignedUrl(
   supabase: SupabaseClient,
-  bucket: "avatars" | "chat-attachments",
+  bucket: PrivateStorageBucket,
   storagePath: string | null | undefined
 ): Promise<string | null> {
   if (!storagePath) return null;
@@ -73,7 +78,7 @@ export async function resolvePrivateSignedUrl(
 
 export async function primePrivateSignedUrls(
   supabase: SupabaseClient,
-  bucket: "avatars" | "chat-attachments",
+  bucket: PrivateStorageBucket,
   paths: (string | null | undefined)[]
 ): Promise<void> {
   const missing = Array.from(
@@ -110,7 +115,7 @@ export async function primePrivateSignedUrls(
  * binary magic-byte header using `@asterial/core` before staging or uploading.
  */
 export async function pickAndValidateNativeFile(
-  kind: "avatar" | "attachment"
+  kind: "avatar" | "attachment" | "social-image"
 ): Promise<ValidatedNativeFile | null> {
   const picked = await AsterialNative.pickMediaOrDocument(kind);
   if (!picked) return null;
@@ -144,7 +149,7 @@ function encodeStorageObjectPath(storagePath: string): string {
 
 export async function uploadValidatedNativeFile(params: {
   supabase: SupabaseClient;
-  bucket: "avatars" | "chat-attachments";
+  bucket: PrivateStorageBucket;
   storagePath: string;
   file: ValidatedNativeFile;
   upsert?: boolean;
@@ -195,11 +200,19 @@ export async function uploadValidatedNativeFile(params: {
   }
 }
 
+/**
+ * NOTE: `avatars_insert_own` storage policy enforces `(storage.foldername(name))[1] = auth.uid()::text`.
+ * Always pass the authenticated uploader's `user.id` as `uploaderUserId` even for group/Orbit icons!
+ */
 export function buildAvatarStoragePath(
-  ownerFolderId: string,
-  fileName: string
+  uploaderUserId: string,
+  fileName: string,
+  subFolder?: string
 ): string {
-  return `${ownerFolderId}/${Date.now()}-${sanitizeStorageFileName(fileName)}`;
+  const prefix = subFolder
+    ? `${uploaderUserId}/${subFolder}`
+    : uploaderUserId;
+  return `${prefix}/${Date.now()}-${sanitizeStorageFileName(fileName)}`;
 }
 
 export function buildChatAttachmentStoragePath(
@@ -208,6 +221,22 @@ export function buildChatAttachmentStoragePath(
   fileName: string
 ): string {
   return `${conversationId}/${uploaderId}/${Date.now()}-${sanitizeStorageFileName(
+    fileName
+  )}`;
+}
+
+export function buildSocialMediaStoragePath(
+  domain: "posts" | "moments" | "orbits",
+  uploaderId: string,
+  fileName: string,
+  orbitId?: string
+): string {
+  if (domain === "orbits" && orbitId) {
+    return `orbits/${uploaderId}/${orbitId}/${Date.now()}-${sanitizeStorageFileName(
+      fileName
+    )}`;
+  }
+  return `${domain}/${uploaderId}/${Date.now()}-${sanitizeStorageFileName(
     fileName
   )}`;
 }

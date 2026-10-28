@@ -1,8 +1,8 @@
 {
   "name": "ASTERIAL",
-  "version": "1.3.0",
-  "displayVersion": "1.3.0",
-  "versionCode": 13000,
+  "version": "1.4.0",
+  "displayVersion": "1.4.0",
+  "versionCode": 14000,
   "channel": "stable",
   "developer": "Ritam Das",
   "attribution": "By X Huracan",
@@ -11,10 +11,10 @@
   "githubRepo": "frRitamDas/Asterial",
   "releaseDate": "October 2026",
   "releaseNotes": [
-    "Complete native React Native 0.83 Android authentication: email sign-in, live @username registration, password visibility controls, recovery deep links, and first-run profile onboarding",
-    "Full native Android 1:1 and group real-time messaging parity with composite (created_at, id) keyset cursor pagination, replies, reactions, edits, unsend, typing indicators, and live presence",
-    "Private Supabase Storage attachment & avatar pipeline on Android with binary magic-byte verification, live streaming upload progress, cancellation, and signed-URL image/document viewing",
-    "Native Contacts directory, user profile sheets, group role administration (owner/admin/member), user blocking, abuse reporting, and read-receipt privacy trigger enforcement",
-    "Tag-driven GitHub Actions Android release pipeline compiling Hermes bytecode APKs, verifying signatures and SHA-256 checksums, and publishing official GitHub Releases automatically"
+    "Repaired Android authentication & networking ('Network request failed' root-cause fix): decoupled CI build-time environment generation from placeholder builds, added native Android HttpsURLConnection fallback, strict NetworkSecurityConfig TLS enforcement, and actionable error diagnostics",
+    "Orbits community platform across Web & native Android: public and private communities, #announcements and multi-channel discussions, owner/admin/member governance, moderation controls, and cursor-paginated history",
+    "Moments temporary updates across Web & native Android: 6h/12h/24h/48h expiring text and photo updates with database RLS expiration enforcement, audience controls, view tracking, and full-screen viewer",
+    "Chronological Social Feed across Web & native Android: persistent text and photo posts, transactional likes and comments, visibility rules, cursor pagination, editing, deletion, blocking, and reporting",
+    "Complete v1.4.0 monochrome UI/UX overhaul across Web & Android plus multi-ABI + universal APK verification and automated tag-driven GitHub Release pipeline"
   ]
 }

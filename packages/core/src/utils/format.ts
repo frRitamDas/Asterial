@@ -41,6 +41,29 @@ export function formatMessageTimestamp(iso: string): string {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+export const formatMessageTime = formatMessageTimestamp;
+
+export function formatRelativeTime(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const diffSeconds = Math.max(
+    0,
+    Math.floor((Date.now() - date.getTime()) / 1000)
+  );
+  if (diffSeconds < 45) return "just now";
+  if (diffSeconds < 3600) {
+    return `${Math.floor(diffSeconds / 60)}m ago`;
+  }
+  if (diffSeconds < 86_400) {
+    return `${Math.floor(diffSeconds / 3600)}h ago`;
+  }
+  if (diffSeconds < 604_800) {
+    return `${Math.floor(diffSeconds / 86_400)}d ago`;
+  }
+  return formatShortTime(iso);
+}
+
 export function formatDateDivider(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "";
@@ -99,6 +122,8 @@ export function formatBytes(bytes: number): string {
   const val = bytes / Math.pow(1024, idx);
   return `${val >= 10 || idx === 0 ? val.toFixed(0) : val.toFixed(1)} ${units[idx]}`;
 }
+
+export const formatByteSize = formatBytes;
 
 export function getInitials(name: string | null | undefined): string {
   const cleaned = (name || "").trim();

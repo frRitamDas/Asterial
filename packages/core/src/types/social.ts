@@ -1,82 +1,158 @@
 /**
- * Phase 2+ Social Networking Domain Contracts (Shared across Next.js Web & React Native Android).
- *
- * NOTE: These interfaces define the target data contracts for Phase 2+ additive
- * Supabase migrations (follows, posts, media, likes, comments, bookmarks,
- * social notifications, and push device tokens). No destructive or premature
- * production schema changes are applied in Phase 1.
+ * ASTERIAL v1.4.0 Shared Social, Community (Orbits) & Temporary Updates (Moments) Contracts
+ * Shared across Next.js Web and Dedicated React Native Android.
  */
 
-export type AccountVisibility = "public" | "private";
-export type FollowStatus = "accepted" | "pending";
-export type PostVisibility = "public" | "followers";
-export type SocialNotificationKind =
-  | "follow"
-  | "follow_request"
-  | "follow_accepted"
-  | "post_like"
-  | "post_comment"
-  | "post_reply"
-  | "post_mention";
-export type DevicePlatform = "android" | "ios" | "web";
+export type OrbitVisibility = "public" | "private";
+export type OrbitRole = "owner" | "admin" | "member";
+export type OrbitMemberStatus = "active" | "invited" | "banned" | "left";
 
-export interface FollowRelationshipRow {
-  follower_id: string;
-  following_id: string;
-  status: FollowStatus;
+export interface OrbitRow {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  icon_url: string | null;
+  visibility: OrbitVisibility;
+  created_by: string | null;
+  member_count: number;
+  deleted_at: string | null;
   created_at: string;
-  responded_at: string | null;
+  updated_at: string;
 }
+
+export interface OrbitMemberRow {
+  orbit_id: string;
+  user_id: string;
+  role: OrbitRole;
+  status: OrbitMemberStatus;
+  joined_at: string;
+  updated_at: string;
+}
+
+export interface OrbitChannelRow {
+  id: string;
+  orbit_id: string;
+  slug: string;
+  name: string;
+  topic: string;
+  is_announcement: boolean;
+  sort_order: number;
+  last_message_preview: string | null;
+  last_message_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OrbitMessageRow {
+  id: string;
+  orbit_id: string;
+  channel_id: string;
+  sender_id: string | null;
+  client_id: string | null;
+  kind: "user" | "system";
+  body: string;
+  reply_to_id: string | null;
+  attachment_path: string | null;
+  attachment_name: string | null;
+  attachment_mime: string | null;
+  attachment_size: number | null;
+  edited_at: string | null;
+  deleted_at: string | null;
+  deleted_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type MomentTone = "obsidian" | "graphite" | "slate" | "ivory";
+export type MomentAudience = "everyone" | "contacts";
+export type MomentDurationHours = 6 | 12 | 24 | 48;
+
+export interface MomentRow {
+  id: string;
+  author_id: string;
+  caption: string;
+  background_tone: MomentTone;
+  media_path: string | null;
+  media_mime: string | null;
+  media_width: number | null;
+  media_height: number | null;
+  audience: MomentAudience;
+  duration_hours: MomentDurationHours;
+  view_count: number;
+  created_at: string;
+  expires_at: string;
+  deleted_at: string | null;
+}
+
+export interface ActiveMomentItem {
+  id: string;
+  author_id: string;
+  author_username: string;
+  author_display_name: string;
+  author_avatar_url: string | null;
+  caption: string;
+  background_tone: MomentTone;
+  media_path: string | null;
+  media_mime: string | null;
+  media_width: number | null;
+  media_height: number | null;
+  audience: MomentAudience;
+  duration_hours: number;
+  view_count: number;
+  viewer_has_viewed: boolean;
+  created_at: string;
+  expires_at: string;
+}
+
+export type PostVisibility = "public" | "contacts";
+export type FeedScope = "all" | "contacts";
 
 export interface PostRow {
   id: string;
   author_id: string;
   body: string;
   visibility: PostVisibility;
-  reply_to_post_id: string | null;
-  repost_of_post_id: string | null;
-  has_media: boolean;
+  media_path: string | null;
+  media_mime: string | null;
+  media_name: string | null;
+  media_size: number | null;
+  media_width: number | null;
+  media_height: number | null;
   like_count: number;
   comment_count: number;
-  repost_count: number;
   edited_at: string | null;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export interface PostMediaRow {
+export interface FeedPostItem {
   id: string;
-  post_id: string;
-  uploader_id: string;
-  storage_bucket: "post-media";
-  storage_path: string;
-  mime_type: string;
-  byte_size: number;
-  width: number | null;
-  height: number | null;
-  alt_text: string;
-  sort_order: number;
+  author_id: string;
+  author_username: string;
+  author_display_name: string;
+  author_avatar_url: string | null;
+  body: string;
+  visibility: PostVisibility;
+  media_path: string | null;
+  media_mime: string | null;
+  media_name: string | null;
+  media_size: number | null;
+  media_width: number | null;
+  media_height: number | null;
+  like_count: number;
+  comment_count: number;
+  viewer_has_liked: boolean;
+  edited_at: string | null;
   created_at: string;
-}
-
-export interface PostLikeRow {
-  post_id: string;
-  user_id: string;
-  created_at: string;
-}
-
-export interface PostBookmarkRow {
-  post_id: string;
-  user_id: string;
-  created_at: string;
+  updated_at: string;
 }
 
 export interface PostCommentRow {
   id: string;
   post_id: string;
   author_id: string;
-  parent_comment_id: string | null;
   body: string;
   edited_at: string | null;
   deleted_at: string | null;
@@ -84,23 +160,25 @@ export interface PostCommentRow {
   updated_at: string;
 }
 
-export interface SocialNotificationRow {
-  id: string;
-  recipient_id: string;
-  actor_id: string | null;
-  kind: SocialNotificationKind;
-  post_id: string | null;
-  comment_id: string | null;
-  read_at: string | null;
-  created_at: string;
+export interface EnrichedPostComment extends PostCommentRow {
+  author_username: string;
+  author_display_name: string;
+  author_avatar_url: string | null;
 }
 
-export interface PushDeviceTokenRow {
-  id: string;
-  user_id: string;
-  platform: DevicePlatform;
-  token: string;
-  device_label: string;
-  last_active_at: string;
-  created_at: string;
+export function formatMomentTimeRemaining(
+  expiresAtIso: string,
+  nowMs = Date.now()
+): string {
+  const diffMs = new Date(expiresAtIso).getTime() - nowMs;
+  if (!Number.isFinite(diffMs) || diffMs <= 0) return "Expired";
+  const totalMinutes = Math.ceil(diffMs / 60_000);
+  if (totalMinutes < 60) return `${totalMinutes}m left`;
+  const hours = Math.floor(totalMinutes / 60);
+  const mins = totalMinutes % 60;
+  return mins > 0 ? `${hours}h ${mins}m left` : `${hours}h left`;
+}
+
+export function canModerateOrbit(role: OrbitRole | null | undefined): boolean {
+  return role === "owner" || role === "admin";
 }

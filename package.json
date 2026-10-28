@@ -1,8 +1,8 @@
 {
   "name": "asterial",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "private": true,
-  "description": "ASTERIAL v1.3.0 — Precision real-time messaging across Web & Android. Official Developer: Ritam Das | By X Huracan.",
+  "description": "ASTERIAL v1.4.0 — Precision real-time messaging, Orbits, Moments & Social Feed across Web & Android. Official Developer: Ritam Das | By X Huracan.",
   "author": "Ritam Das (By X Huracan)",
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0 --port 3000",
@@ -14,9 +14,10 @@
     "version:sync": "node scripts/sync-version.mjs",
     "version:check": "node scripts/sync-version.mjs --check",
     "mobile:env": "node scripts/prepare-mobile-env.mjs",
-    "mobile:typecheck": "npm run mobile:env && npm --prefix mobile run typecheck",
+    "mobile:env:strict": "node scripts/prepare-mobile-env.mjs --require-valid",
+    "mobile:typecheck": "node scripts/prepare-mobile-env.mjs --if-missing && npm --prefix mobile run typecheck",
     "mobile:test": "npm --prefix mobile test",
-    "check": "npm run version:check && npm run typecheck && npm run lint && npm run test"
+    "check": "npm run version:check && npm run typecheck && npm run mobile:typecheck && npm run lint && npm run test && npm run mobile:test"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

@@ -648,15 +648,16 @@ export function ConversationInfoModal({
   };
 
   const handleUploadGroupAvatar = async () => {
-    if (!supabase) return;
+    if (!supabase || !currentUserId) return;
     setErrorText(null);
     try {
       const picked = await pickAndValidateNativeFile("avatar");
       if (!picked) return;
       setBusyMessage("Uploading group avatar…");
       const storagePath = buildAvatarStoragePath(
-        conversation.id,
-        picked.fileName
+        currentUserId,
+        picked.fileName,
+        `group-${conversation.id}`
       );
       await uploadValidatedNativeFile({
         supabase,

@@ -19,6 +19,14 @@ export interface GitHubReleaseApiPayload {
   assets?: GitHubReleaseAssetSummary[];
 }
 
+export interface PublishedAbiApkAsset {
+  abi: string;
+  name: string;
+  downloadUrl: string;
+  sizeBytes: number;
+  checksumUrl: string | null;
+}
+
 export interface ResolvedReleaseInfo {
   product: string;
   version: string;
@@ -38,6 +46,7 @@ export interface ResolvedReleaseInfo {
   verifiedApkDownloadUrl: string | null;
   verifiedChecksumUrl: string | null;
   verifiedApkSizeBytes: number | null;
+  verifiedAbiApks: PublishedAbiApkAsset[];
   verifiedReleaseHtmlUrl: string | null;
   verifiedPublishedAt: string | null;
   signingStatus: "production-keystore" | "debug-signed" | "pending-release";
@@ -78,14 +87,50 @@ export function extractReleaseAssets(
 ): {
   apkAsset: GitHubReleaseAssetSummary | null;
   checksumAsset: GitHubReleaseAssetSummary | null;
+  abiApks: PublishedAbiApkAsset[];
   signingStatus: "production-keystore" | "debug-signed";
 } | null {
   if (!release || release.draft) return null;
   const assets = Array.isArray(release.assets) ? release.assets : [];
-  const apkAsset =
-    assets.find((a) => a.name.toLowerCase().endsWith(".apk")) || null;
-  const checksumAsset =
-    assets.find((a) => a.name.toLowerCase().endsWith(".sha256")) || null;
+  const allApks = assets.filter((a) => a.name.toLowerCase().endsWith(".apk"));
+
+  // Prefer universal or primary release APK as the main download button
+  const primaryApk =
+    allApks.find((a) => a.name.toLowerCase().includes("universal")) ||
+    allApks.find(
+      (a) =>
+        !a.name.includes("arm64-v8a") &&
+        !a.name.includes("armeabi-v7a") &&
+        !a.name.includes("x86_64")
+    ) ||
+    allApks[0] ||
+    null;
+
+  const primaryChecksum =
+    (primaryApk &&
+      assets.find(
+        (a) => a.name.toLowerCase() === `${primaryApk.name.toLowerCase()}.sha256`
+      )) ||
+    assets.find((a) => a.name.toLowerCase().endsWith(".sha256")) ||
+    null;
+
+  const abiApks: PublishedAbiApkAsset[] = [];
+  for (const abi of ["arm64-v8a", "armeabi-v7a", "x86_64"]) {
+    const match = allApks.find((a) => a.name.includes(abi));
+    if (match) {
+      const sha =
+        assets.find(
+          (a) => a.name.toLowerCase() === `${match.name.toLowerCase()}.sha256`
+        ) || null;
+      abiApks.push({
+        abi,
+        name: match.name,
+        downloadUrl: match.browser_download_url,
+        sizeBytes: match.size,
+        checksumUrl: sha?.browser_download_url || null,
+      });
+    }
+  }
 
   const bodyText = (release.body || "").toLowerCase();
   const signingStatus: "production-keystore" | "debug-signed" =
@@ -94,7 +139,12 @@ export function extractReleaseAssets(
       ? "production-keystore"
       : "debug-signed";
 
-  return { apkAsset, checksumAsset, signingStatus };
+  return {
+    apkAsset: primaryApk,
+    checksumAsset: primaryChecksum,
+    abiApks,
+    signingStatus,
+  };
 }
 
 async function fetchGitHubJson(
@@ -152,10 +202,13 @@ export async function resolveAsterialReleaseInfo(): Promise<ResolvedReleaseInfo>
     expectedTag,
     apkFileName: exactAssets?.apkAsset?.name || apkFileName,
     apkDownloadUrl: verifiedApkDownloadUrl || githubReleasesUrl,
-    tagReleasePublished: Boolean(exactTagRelease && !exactTagRelease.draft),
+    tagReleasePublished: Boolean(
+      exactTagRelease && !exactTagRelease.draft && verifiedApkDownloadUrl
+    ),
     verifiedApkDownloadUrl,
     verifiedChecksumUrl,
     verifiedApkSizeBytes: exactAssets?.apkAsset?.size ?? null,
+    verifiedAbiApks: exactAssets?.abiApks || [],
     verifiedReleaseHtmlUrl:
       exactTagRelease && !exactTagRelease.draft
         ? exactTagRelease.html_url

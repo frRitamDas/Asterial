@@ -5,4 +5,5 @@ export * from "./utils/format";
 export * from "./validation/schemas";
 export * from "./version/semver";
 export * from "./auth/deeplink";
+export * from "./auth/errors";
 export * from "./messaging/helpers";

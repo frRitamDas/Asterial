@@ -14,7 +14,7 @@ on:
         default: false
         type: boolean
       release_tag:
-        description: "Canonical release tag (e.g. v1.3.0) when publish_release is true"
+        description: "Canonical release tag (e.g. v1.4.0) when publish_release is true"
         required: false
         default: ""
         type: string
@@ -36,7 +36,7 @@ env:
 
 jobs:
   verify-and-build-apk:
-    name: Verify Multi-Product Suite & Compile Standalone APK
+    name: Verify Multi-Product Suite & Compile Standalone APKs
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -92,7 +92,7 @@ jobs:
           if [[ "$GIT_REF" == refs/tags/v* ]]; then
             RAW_TAG="${GIT_REF#refs/tags/}"
             if [[ ! "$RAW_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-              echo "::error::Invalid semantic version tag '$RAW_TAG'. Expected canonical vMAJOR.MINOR.PATCH (e.g. v1.3.0)."
+              echo "::error::Invalid semantic version tag '$RAW_TAG'. Expected canonical vMAJOR.MINOR.PATCH (e.g. v1.4.0)."
               exit 1
             fi
             TAG_VERSION="${RAW_TAG#v}"
@@ -135,7 +135,7 @@ jobs:
           echo "build_mode=ci-build" >> "$GITHUB_OUTPUT"
           echo "should_publish_release=false" >> "$GITHUB_OUTPUT"
           echo "release_tag=" >> "$GITHUB_OUTPUT"
-          echo "Mode: Ordinary Branch CI Build (compiles & verifies standalone APK artifact without publishing a GitHub Release)."
+          echo "Mode: Ordinary Branch CI Build (compiles & verifies standalone APK artifacts without publishing a GitHub Release)."
 
       - name: Provision Android SDK, Build-Tools, NDK & CMake
         run: |
@@ -162,18 +162,45 @@ jobs:
           npm ci
           npm --prefix mobile ci
 
-      - name: Prepare Public Mobile Runtime Config
+      - name: Prepare & Preflight Verified Public Mobile Runtime Config
+        id: mobile_cfg
         env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL || secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY || secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           NEXT_PUBLIC_APP_URL: "https://asterial.vercel.app"
-        run: npm run mobile:env
+        run: |
+          npm run mobile:env:strict
+          RESOLVED_URL=$(node -e "
+            const fs = require('fs');
+            const raw = fs.readFileSync('mobile/src/config/runtimeEnv.generated.ts', 'utf8');
+            const url = JSON.parse(raw.match(/supabaseUrl:\s*(\"[^\"]+\")/)[1]);
+            const key = JSON.parse(raw.match(/supabaseAnonKey:\s*(\"[^\"]+\")/)[1]);
+            if (!url.startsWith('https://') || url.includes('placeholder') || key.includes('placeholder') || key.startsWith('sb_secret_')) {
+              console.error('Invalid mobile config detected!');
+              process.exit(1);
+            }
+            process.stdout.write(url);
+          ")
+          RESOLVED_KEY=$(node -e "
+            const fs = require('fs');
+            const raw = fs.readFileSync('mobile/src/config/runtimeEnv.generated.ts', 'utf8');
+            process.stdout.write(JSON.parse(raw.match(/supabaseAnonKey:\s*(\"[^\"]+\")/)[1]));
+          ")
+          RESOLVED_HOST=$(node -p "new URL(process.argv[1]).host" "$RESOLVED_URL")
+          echo "supabase_host=${RESOLVED_HOST}" >> "$GITHUB_OUTPUT"
+          echo "NEXT_PUBLIC_SUPABASE_URL=${RESOLVED_URL}" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=${RESOLVED_KEY}" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_APP_URL=https://asterial.vercel.app" >> "$GITHUB_ENV"
 
-      - name: Verify Version Alignment, Strict TypeScript, ESLint, Tests & Next.js Build
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co' }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'public-anon-placeholder' }}
-          NEXT_PUBLIC_APP_URL: "https://asterial.vercel.app"
+          # Live TLS preflight against production Supabase Auth before compiling APK
+          HTTP_STATUS=$(curl -sS -o /dev/null -w "%{http_code}" -H "apikey: ${RESOLVED_KEY}" "${RESOLVED_URL}/auth/v1/health")
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "::error::Supabase Auth preflight failed against ${RESOLVED_HOST}/auth/v1/health (HTTP ${HTTP_STATUS})."
+            exit 1
+          fi
+          echo "Verified live TLS reachability of ${RESOLVED_HOST}/auth/v1/health (HTTP 200)."
+
+      - name: Verify Version Alignment, Strict TypeScript, ESLint, Automated Tests & Next.js Build
         run: |
           npm run version:check
           npm run typecheck
@@ -189,6 +216,10 @@ jobs:
           SEMVER=$(node -p "require('./version.json').version")
           BASE_CODE=$(node -p "require('./version.json').versionCode")
           COMPUTED_CODE=$((BASE_CODE + GITHUB_RUN_NUMBER))
+          if [ "$COMPUTED_CODE" -le 13010 ]; then
+            echo "::error::Computed versionCode ($COMPUTED_CODE) must be strictly greater than all v1.3.x builds (13010)."
+            exit 1
+          fi
           echo "semver=$SEMVER" >> "$GITHUB_OUTPUT"
           echo "version_code=$COMPUTED_CODE" >> "$GITHUB_OUTPUT"
 
@@ -210,11 +241,12 @@ jobs:
             echo "keystore_ready=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Compile, Verify Hermes Bytecode & Sign React Native Android APK
+      - name: Compile Universal & ABI-Split APKs, Assert Hermes Auth Config & Sign
         id: apk
         working-directory: mobile/android
         env:
           CI: "true"
+          EXPECTED_SUPABASE_HOST: ${{ steps.mobile_cfg.outputs.supabase_host }}
           ASTERIAL_VERSION_NAME: ${{ steps.meta.outputs.semver }}
           ASTERIAL_VERSION_CODE: ${{ steps.meta.outputs.version_code }}
           ANDROID_KEYSTORE_PATH: ${{ steps.keystore.outputs.keystore_path }}
@@ -227,70 +259,118 @@ jobs:
 
           if [ "${{ steps.keystore.outputs.keystore_ready }}" = "true" ]; then
             ./gradlew assembleRelease --no-daemon
-            BUILT_APK="app/build/outputs/apk/release/app-release.apk"
-            APK_FILENAME="asterial-android-${ASTERIAL_VERSION_NAME}.apk"
+            APK_DIR="app/build/outputs/apk/release"
+            VARIANT_SUFFIX="release"
+            NAME_SUFFIX=""
             SIGNING_MODE="production-keystore"
           else
             ./gradlew assembleDebug --no-daemon
-            BUILT_APK="app/build/outputs/apk/debug/app-debug.apk"
-            APK_FILENAME="asterial-android-${ASTERIAL_VERSION_NAME}-debug.apk"
+            APK_DIR="app/build/outputs/apk/debug"
+            VARIANT_SUFFIX="debug"
+            NAME_SUFFIX="-debug"
             SIGNING_MODE="debug-signed"
           fi
 
-          if [ ! -s "$BUILT_APK" ]; then
-            echo "::error::Compiled APK is missing or empty at $BUILT_APK"
-            exit 1
-          fi
-
-          APK_BYTES=$(stat -c%s "$BUILT_APK")
-          if [ "$APK_BYTES" -lt 5000000 ]; then
-            echo "::error::Compiled APK size ($APK_BYTES bytes) is unexpectedly small (< 5 MB)."
-            exit 1
-          fi
-
-          # 1. Verify embedded JavaScript bundle exists AND carries Hermes bytecode magic header (c61fbc03c103191f)
-          unzip -p "$BUILT_APK" assets/index.android.bundle | head -c 8 > /tmp/bundle_magic.bin
-          BUNDLE_MAGIC=$(od -An -tx1 /tmp/bundle_magic.bin | tr -d ' \n')
-          rm -f /tmp/bundle_magic.bin
-          if [ "$BUNDLE_MAGIC" != "c61fbc03c103191f" ]; then
-            echo "::error::assets/index.android.bundle inside APK does not carry Hermes bytecode magic header (got: '$BUNDLE_MAGIC')."
-            exit 1
-          fi
-          echo "Verified embedded Hermes bytecode bundle (magic=$BUNDLE_MAGIC)."
-
-          # 2. Verify APK cryptographic signature via Android SDK apksigner
           APKSIGNER="$ANDROID_HOME/build-tools/${ANDROID_BUILD_TOOLS}/apksigner"
-          "$APKSIGNER" verify --verbose "$BUILT_APK"
 
-          # 3. Stage APK, SHA-256 checksum, and build manifest
-          DEST_APK="../../release-dist/${APK_FILENAME}"
+          for ABI in universal arm64-v8a armeabi-v7a x86_64; do
+            SRC_APK="${APK_DIR}/app-${ABI}-${VARIANT_SUFFIX}.apk"
+            if [ ! -s "$SRC_APK" ]; then
+              echo "::error::Missing compiled APK for ABI '${ABI}' at ${SRC_APK}"
+              exit 1
+            fi
+
+            BYTES=$(stat -c%s "$SRC_APK")
+            if [ "$BYTES" -lt 5000000 ]; then
+              echo "::error::APK for ${ABI} ($BYTES bytes) is unexpectedly small (< 5 MB)."
+              exit 1
+            fi
+
+            # 1. Verify embedded Hermes bytecode magic header (c61fbc03c103191f)
+            unzip -p "$SRC_APK" assets/index.android.bundle | head -c 8 > /tmp/bundle_magic.bin
+            BUNDLE_MAGIC=$(od -An -tx1 /tmp/bundle_magic.bin | tr -d ' \n')
+            rm -f /tmp/bundle_magic.bin
+            if [ "$BUNDLE_MAGIC" != "c61fbc03c103191f" ]; then
+              echo "::error::assets/index.android.bundle inside ${SRC_APK} lacks Hermes magic header (got: '$BUNDLE_MAGIC')."
+              exit 1
+            fi
+
+            # 2. Assert real production Supabase host is compiled inside Hermes bytecode & zero placeholders/service_role keys exist
+            unzip -p "$SRC_APK" assets/index.android.bundle > /tmp/extracted.hbc
+            node -e "
+              const fs = require('fs');
+              const buf = fs.readFileSync('/tmp/extracted.hbc').toString('latin1');
+              const host = process.env.EXPECTED_SUPABASE_HOST;
+              if (!host || !buf.includes('https://' + host)) {
+                console.error('::error::CRITICAL: Compiled Hermes bundle missing production URL https://' + host);
+                process.exit(1);
+              }
+              if (buf.includes('https://placeholder.supabase.co') || buf.includes('public-anon-placeholder')) {
+                console.error('::error::CRITICAL: Placeholder Supabase string found in compiled Hermes bundle!');
+                process.exit(1);
+              }
+              const jwts = buf.match(/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[A-Za-z0-9_-]+/g) || [];
+              if (jwts.length === 0 && !buf.includes('sb_publishable_')) {
+                console.error('::error::CRITICAL: Compiled Hermes bundle missing public anon/publishable key!');
+                process.exit(1);
+              }
+              for (const jwt of jwts) {
+                const payload = Buffer.from(jwt.split('.')[1], 'base64url').toString('utf8');
+                if (payload.includes('service_role')) {
+                  console.error('::error::CRITICAL: service_role JWT leaked into compiled Hermes bundle!');
+                  process.exit(1);
+                }
+              }
+            "
+            rm -f /tmp/extracted.hbc
+
+            # 3. Verify cryptographic APK signature via Android SDK apksigner
+            "$APKSIGNER" verify --verbose "$SRC_APK"
+
+            # 4. Copy to release-dist & compute SHA-256
+            OUT_APK="asterial-android-${ASTERIAL_VERSION_NAME}-${ABI}${NAME_SUFFIX}.apk"
+            cp "$SRC_APK" "../../release-dist/${OUT_APK}"
+            (
+              cd ../../release-dist
+              sha256sum "$OUT_APK" > "${OUT_APK}.sha256"
+              sha256sum -c "${OUT_APK}.sha256"
+            )
+          done
+
+          # Primary universal APK filename & checksum
+          APK_FILENAME="asterial-android-${ASTERIAL_VERSION_NAME}-universal${NAME_SUFFIX}.apk"
           CHECKSUM_FILENAME="${APK_FILENAME}.sha256"
-          cp "$BUILT_APK" "$DEST_APK"
-
-          (
-            cd ../../release-dist
-            sha256sum "$APK_FILENAME" > "$CHECKSUM_FILENAME"
-            sha256sum -c "$CHECKSUM_FILENAME"
-          )
-
+          UNIVERSAL_BYTES=$(stat -c%s "../../release-dist/${APK_FILENAME}")
           SHA256_HASH=$(awk '{print $1}' "../../release-dist/${CHECKSUM_FILENAME}")
           ARTIFACT_NAME="asterial-android-${ASTERIAL_VERSION_NAME}"
 
-          cat <<EOF > "../../release-dist/asterial-android-${ASTERIAL_VERSION_NAME}.manifest.json"
-          {
-            "product": "ASTERIAL",
-            "applicationId": "com.xhuracan.asterial",
-            "architecture": "React Native 0.83.10 (Fabric + Hermes)",
-            "version": "${ASTERIAL_VERSION_NAME}",
-            "versionCode": ${ASTERIAL_VERSION_CODE},
-            "buildMode": "${{ steps.mode.outputs.build_mode }}",
-            "signingMode": "${SIGNING_MODE}",
-            "apkFilename": "${APK_FILENAME}",
-            "apkBytes": ${APK_BYTES},
-            "sha256": "${SHA256_HASH}",
-            "commitSha": "${GITHUB_SHA}"
-          }
-          EOF
+          node -e "
+            const fs = require('fs');
+            const path = require('path');
+            const dist = '../../release-dist';
+            const files = fs.readdirSync(dist).filter(f => f.endsWith('.apk')).sort();
+            const artifacts = files.map(f => ({
+              filename: f,
+              bytes: fs.statSync(path.join(dist, f)).size,
+              sha256: fs.readFileSync(path.join(dist, f + '.sha256'), 'utf8').trim().split(/\s+/)[0]
+            }));
+            const manifest = {
+              product: 'ASTERIAL',
+              applicationId: 'com.xhuracan.asterial',
+              architecture: 'React Native 0.83.10 (Fabric + Hermes)',
+              version: process.env.ASTERIAL_VERSION_NAME,
+              versionCode: Number(process.env.ASTERIAL_VERSION_CODE),
+              buildMode: '${{ steps.mode.outputs.build_mode }}',
+              signingMode: '${SIGNING_MODE}',
+              supabaseEndpointHost: process.env.EXPECTED_SUPABASE_HOST,
+              primaryUniversalApk: '${APK_FILENAME}',
+              primaryUniversalBytes: ${UNIVERSAL_BYTES},
+              primaryUniversalSha256: '${SHA256_HASH}',
+              artifacts,
+              commitSha: '${GITHUB_SHA}'
+            };
+            fs.writeFileSync(path.join(dist, 'asterial-android-' + process.env.ASTERIAL_VERSION_NAME + '.manifest.json'), JSON.stringify(manifest, null, 2));
+          "
 
           echo "artifact_name=${ARTIFACT_NAME}" >> "$GITHUB_OUTPUT"
           echo "apk_filename=${APK_FILENAME}" >> "$GITHUB_OUTPUT"
@@ -302,13 +382,13 @@ jobs:
         if: always() && steps.keystore.outputs.keystore_path != ''
         run: rm -f "${{ steps.keystore.outputs.keystore_path }}"
 
-      - name: Upload Verified Android APK & Checksum Artifact
+      - name: Upload Verified Universal & ABI-Split APKs + Checksums
         uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.apk.outputs.artifact_name }}
           path: |
-            release-dist/${{ steps.apk.outputs.apk_filename }}
-            release-dist/${{ steps.apk.outputs.checksum_filename }}
+            release-dist/*.apk
+            release-dist/*.apk.sha256
             release-dist/asterial-android-${{ steps.meta.outputs.semver }}.manifest.json
           if-no-files-found: error
           retention-days: 30
@@ -320,12 +400,14 @@ jobs:
             echo "- **Build Mode:** \`${{ steps.mode.outputs.build_mode }}\`"
             echo "- **Application ID:** \`com.xhuracan.asterial\`"
             echo "- **Version / versionCode:** \`${{ steps.meta.outputs.semver }}\` / \`${{ steps.meta.outputs.version_code }}\`"
-            echo "- **APK File:** \`${{ steps.apk.outputs.apk_filename }}\`"
-            echo "- **SHA-256:** \`${{ steps.apk.outputs.sha256 }}\`"
+            echo "- **Verified Supabase Auth Host:** \`${{ steps.mobile_cfg.outputs.supabase_host }}\` (HTTP 200 preflight + Hermes bytecode verified)"
+            echo "- **Primary Universal APK:** \`${{ steps.apk.outputs.apk_filename }}\`"
+            echo "- **Universal SHA-256:** \`${{ steps.apk.outputs.sha256 }}\`"
+            echo "- **ABI-Split APKs Built & Verified:** \`arm64-v8a\`, \`armeabi-v7a\`, \`x86_64\`"
             if [ "${{ steps.apk.outputs.signing_mode }}" = "production-keystore" ]; then
               echo "- **Signing Status:** Production keystore signed (V1/V2/V3)"
             else
-              echo "- **Signing Status:** Debug-signed standalone APK (NOT signed with a production release keystore)"
+              echo "- **Signing Status:** Debug-signed standalone test APKs (NOT signed with a production release keystore)"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -343,13 +425,13 @@ jobs:
         with:
           ref: ${{ github.sha }}
 
-      - name: Download Verified APK & Checksum Artifact
+      - name: Download Verified APKs & Checksums Artifact
         uses: actions/download-artifact@v8
         with:
           name: ${{ needs.verify-and-build-apk.outputs.artifact_name }}
           path: release-assets
 
-      - name: Re-verify SHA-256 Checksum & Publish GitHub Release
+      - name: Re-verify All SHA-256 Checksums & Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.verify-and-build-apk.outputs.release_tag }}
@@ -362,11 +444,13 @@ jobs:
         run: |
           cd release-assets
           if [ ! -s "$APK_FILE" ] || [ ! -s "$CHECKSUM_FILE" ]; then
-            echo "::error::Expected verified APK or checksum file missing prior to release publication."
+            echo "::error::Expected verified universal APK or checksum file missing prior to release publication."
             exit 1
           fi
 
-          sha256sum -c "$CHECKSUM_FILE"
+          for SUM_FILE in *.apk.sha256; do
+            sha256sum -c "$SUM_FILE"
+          done
 
           if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
             echo "::error::GitHub Release '${RELEASE_TAG}' already exists. Aborting to prevent overwriting release assets."
@@ -378,14 +462,23 @@ jobs:
             console.log((v.releaseNotes || []).map(n => '- ' + n).join('\n'));
           ")
 
+          ABI_TABLE=$(node -e "
+            const fs = require('fs');
+            const m = JSON.parse(fs.readFileSync('asterial-android-${SEMVER}.manifest.json', 'utf8'));
+            for (const a of m.artifacts) {
+              const mb = (a.bytes / (1024 * 1024)).toFixed(1) + ' MB';
+              console.log('| \`' + a.filename + '\` | ' + mb + ' | \`' + a.sha256 + '\` |');
+            }
+          ")
+
           if [ "$SIGNING_MODE" = "production-keystore" ]; then
             SIGNING_LINE="Production keystore signed (Android V1 / V2 / V3)"
           else
-            SIGNING_LINE="Debug-signed standalone APK (NOT signed with a production release keystore — configure ANDROID_KEYSTORE_* repository secrets for Play Protect production signing)"
+            SIGNING_LINE="Debug-signed standalone APK (test artifact — NOT signed with a production release keystore; configure ANDROID_KEYSTORE_* repository secrets for Play Protect production signing)"
           fi
 
           cat <<EOF > release-notes.md
-          ## ASTERIAL v${SEMVER} — Native Android Release
+          ## ASTERIAL v${SEMVER} — Full-Stack Monochrome Overhaul, Auth Repair & Social Expansion
 
           - **Application ID:** \`com.xhuracan.asterial\`
           - **Semantic Version:** \`${SEMVER}\` (\`versionCode\`: \`${VERSION_CODE}\`)
@@ -397,13 +490,18 @@ jobs:
           ### Release Highlights
           ${HIGHLIGHTS}
 
+          ### Verified APK Artifacts & SHA-256 Checksums
+          | APK File | Size | SHA-256 |
+          | --- | --- | --- |
+          ${ABI_TABLE}
+
           ### Verification & Installation (Android 8.0 / API 26+)
-          1. Download **\`${APK_FILE}\`** from the Assets section below.
-          2. Verify integrity against **\`${CHECKSUM_FILE}\`**:
+          1. Download **\`${APK_FILE}\`** (Universal) or **\`asterial-android-${SEMVER}-arm64-v8a...\`.apk** (modern 64-bit phones).
+          2. Verify integrity against its \`.sha256\` checksum file:
              \`\`\`bash
              echo "${SHA256_VAL}  ${APK_FILE}" | sha256sum -c
              \`\`\`
-          3. Open the APK on your Android device to install and launch directly into native ASTERIAL authentication.
+          3. Open the APK on your Android device to install and sign in directly to ASTERIAL.
           EOF
 
           VERIFY_TAG_FLAG=()
@@ -412,12 +510,12 @@ jobs:
           fi
 
           gh release create "$RELEASE_TAG" \
-            "$APK_FILE" \
-            "$CHECKSUM_FILE" \
+            *.apk \
+            *.apk.sha256 \
             "asterial-android-${SEMVER}.manifest.json" \
             --title "ASTERIAL v${SEMVER}" \
             --notes-file release-notes.md \
             --target "$GITHUB_SHA" \
             "${VERIFY_TAG_FLAG[@]}"
 
-          echo "Published GitHub Release ${RELEASE_TAG} with verified APK ${APK_FILE}."
+          echo "Published GitHub Release ${RELEASE_TAG} with verified Universal + ABI-split APKs."

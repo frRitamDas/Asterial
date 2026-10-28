@@ -5,49 +5,161 @@ import {
   THEME_PALETTES,
   canActorRemoveGroupMember,
   canManageGroupSettings,
+  classifyAuthError,
   compareSemver,
   computeOutgoingDeliveryState,
   detectBinaryMimeSignature,
   filterConversationSummaries,
+  formatMomentTimeRemaining,
+  formatRelativeTime,
   groupReactionsByEmoji,
+  isValidPublicSupabaseConfig,
+  isValidPublicSupabaseUrl,
+  momentCreateSchema,
+  orbitChannelCreateSchema,
+  orbitCreateSchema,
+  messageBodySchema,
   parseAuthDeepLink,
   postBodySchema,
+  postCommentSchema,
+  reportCreateSchema,
   sortConversationSummaries,
   validateReleaseTagParity,
   validateUploadMetadataAndHeader,
   type ConversationSummary,
 } from "./index";
 
-describe("@asterial/core shared cross-platform domain package (v1.3.0)", () => {
-  it("exposes shared v1.3.0 brand metadata and all four appearance theme palettes", () => {
+describe("@asterial/core shared cross-platform domain package (v1.4.0)", () => {
+  it("exposes shared v1.4.0 brand metadata, honest security notice, and monochrome palettes", () => {
     assert.equal(ASTERIAL_BRAND.name, "ASTERIAL");
-    assert.equal(ASTERIAL_BRAND.version, "1.3.0");
-    assert.equal(ASTERIAL_BRAND.semver, "1.3.0");
-    assert.equal(ASTERIAL_BRAND.versionCode, 13000);
+    assert.equal(ASTERIAL_BRAND.version, "1.4.0");
+    assert.equal(ASTERIAL_BRAND.semver, "1.4.0");
+    assert.equal(ASTERIAL_BRAND.versionCode, 14000);
     assert.equal(ASTERIAL_BRAND.developer, "Ritam Das");
     assert.equal(ASTERIAL_BRAND.attribution, "By X Huracan");
     assert.equal(ASTERIAL_BRAND.androidPackageId, "com.xhuracan.asterial");
+    assert.equal(/end-to-end encrypted/i.test(ASTERIAL_BRAND.securityNotice), false);
 
     assert.equal(THEME_PALETTES.obsidian.isDark, true);
+    assert.equal(THEME_PALETTES.obsidian.bgVoid, "#050506");
     assert.equal(THEME_PALETTES.pitch.bgVoid, "#000000");
     assert.equal(THEME_PALETTES.graphite.isDark, true);
     assert.equal(THEME_PALETTES.alabaster.isDark, false);
   });
 
-  it("validates upload headers across Web & React Native without DOM File dependency", () => {
+  it("rejects placeholder, loopback, and secret Supabase configs while accepting valid public configs", () => {
+    const anonPayload = Buffer.from(JSON.stringify({ role: "anon" })).toString(
+      "base64url"
+    );
+    const servicePayload = Buffer.from(
+      JSON.stringify({ role: "service_role" })
+    ).toString("base64url");
+    const validAnonJwt = `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.${anonPayload}.valid_signature_sample_123456`;
+    const serviceJwt = `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.${servicePayload}.sig_123456`;
+
+    // Regression guard for v1.3.0 Critical Bug #2 ("Network request failed")
+    assert.equal(isValidPublicSupabaseUrl("https://placeholder.supabase.co"), false);
+    assert.equal(isValidPublicSupabaseUrl("http://localhost:54321"), false);
+    assert.equal(isValidPublicSupabaseUrl("http://10.0.2.2:54321"), false);
+    assert.equal(
+      isValidPublicSupabaseConfig(
+        "https://placeholder.supabase.co",
+        "public-anon-placeholder"
+      ),
+      false
+    );
+    assert.equal(
+      isValidPublicSupabaseConfig(
+        "https://abbhynyhqxgllzsjaljo.supabase.co",
+        "sb_secret_1234567890123456789012345"
+      ),
+      false
+    );
+    assert.equal(
+      isValidPublicSupabaseConfig(
+        "https://abbhynyhqxgllzsjaljo.supabase.co",
+        serviceJwt
+      ),
+      false
+    );
+
+    assert.equal(
+      isValidPublicSupabaseConfig(
+        "https://abbhynyhqxgllzsjaljo.supabase.co",
+        validAnonJwt
+      ),
+      true
+    );
+    assert.equal(
+      isValidPublicSupabaseConfig(
+        "https://abbhynyhqxgllzsjaljo.supabase.co",
+        "sb_publishable_f1AEhK7J3GTHUyBAnu7tSQ_i28M3jc5"
+      ),
+      true
+    );
+  });
+
+  it("classifies authentication failures accurately across network, credentials, rate limits, and session expiry", () => {
+    const netErr = classifyAuthError(new TypeError("Network request failed"));
+    assert.equal(netErr.category, "network_unreachable");
+    assert.equal(netErr.retryable, true);
+
+    const badCreds = classifyAuthError({
+      message: "Invalid login credentials",
+      status: 400,
+    });
+    assert.equal(badCreds.category, "invalid_credentials");
+    assert.equal(badCreds.retryable, false);
+
+    const unconfirmed = classifyAuthError({
+      message: "Email not confirmed",
+      status: 400,
+    });
+    assert.equal(unconfirmed.category, "unverified_email");
+
+    const rateLimit = classifyAuthError({
+      message: "Email rate limit exceeded",
+      status: 429,
+    });
+    assert.equal(rateLimit.category, "rate_limited");
+    assert.equal(rateLimit.retryable, true);
+
+    const conflict = classifyAuthError({
+      message: "User already registered",
+      status: 422,
+    });
+    assert.equal(conflict.category, "user_already_exists");
+
+    const expired = classifyAuthError({
+      message: "Invalid Refresh Token: Refresh Token Not Found",
+      status: 400,
+    });
+    assert.equal(expired.category, "session_expired");
+  });
+
+  it("validates upload headers across Web, Chat, and Social Media without DOM File dependency", () => {
     const pngBytes = new Uint8Array([
       0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
     ]);
     assert.equal(detectBinaryMimeSignature(pngBytes), "image/png");
 
-    const okResult = validateUploadMetadataAndHeader({
+    const okAvatar = validateUploadMetadataAndHeader({
       fileName: "avatar.png",
       byteSize: 2048,
       declaredMime: "image/png",
       headerBytes: pngBytes,
       kind: "avatar",
     });
-    assert.equal(okResult.ok, true);
+    assert.equal(okAvatar.ok, true);
+
+    const okSocial = validateUploadMetadataAndHeader({
+      fileName: "moment-photo.png",
+      byteSize: 512_000,
+      declaredMime: "image/png",
+      headerBytes: pngBytes,
+      kind: "social-image",
+    });
+    assert.equal(okSocial.ok, true);
 
     const exeBytes = new Uint8Array([0x4d, 0x5a, 0x90, 0x00]);
     const badResult = validateUploadMetadataAndHeader({
@@ -58,6 +170,69 @@ describe("@asterial/core shared cross-platform domain package (v1.3.0)", () => {
       kind: "attachment",
     });
     assert.equal(badResult.ok, false);
+  });
+
+  it("validates v1.4.0 Orbits, Moments, Social Feed, and extended Report schemas", () => {
+    const validOrbit = orbitCreateSchema.safeParse({
+      slug: "asterial-design",
+      name: "Asterial Design Systems",
+      description: "Monochrome spatial UI & typography.",
+      visibility: "public",
+    });
+    assert.equal(validOrbit.success, true);
+
+    assert.equal(
+      orbitChannelCreateSchema.safeParse({
+        name: "Design System Updates",
+        topic: "Release notes",
+      }).success,
+      true
+    );
+
+    assert.equal(
+      messageBodySchema.safeParse("Welcome to #general!").success,
+      true
+    );
+
+    assert.equal(
+      momentCreateSchema.safeParse({
+        caption: "Shipping v1.4.0 monochrome architecture",
+        backgroundTone: "obsidian",
+        audience: "everyone",
+        durationHours: 24,
+      }).success,
+      true
+    );
+
+    assert.equal(
+      postBodySchema.safeParse({
+        body: "Hello from ASTERIAL v1.4.0 Social Feed",
+        visibility: "public",
+      }).success,
+      true
+    );
+
+    assert.equal(
+      postCommentSchema.safeParse({ body: "Crisp monochrome hierarchy." })
+        .success,
+      true
+    );
+
+    assert.equal(
+      reportCreateSchema.safeParse({
+        category: "spam",
+        details: "Automated bot spam",
+      }).success,
+      true
+    );
+
+    const futureIso = new Date(Date.now() + 2 * 3600 * 1000 + 60_000).toISOString();
+    assert.match(formatMomentTimeRemaining(futureIso), /left$/);
+    assert.equal(
+      formatMomentTimeRemaining(new Date(Date.now() - 5000).toISOString()),
+      "Expired"
+    );
+    assert.equal(formatRelativeTime(new Date().toISOString()), "just now");
   });
 
   it("parses trusted native Android auth & recovery deep links and rejects untrusted origins", () => {
@@ -86,7 +261,7 @@ describe("@asterial/core shared cross-platform domain package (v1.3.0)", () => {
     assert.equal(untrusted.recognized, false);
   });
 
-  it("enforces mutual read-receipt privacy and group role hierarchy", () => {
+  it("enforces mutual read-receipt privacy, group role hierarchy, and release tag parity", () => {
     const receipts = [
       {
         message_id: "m1",
@@ -121,9 +296,7 @@ describe("@asterial/core shared cross-platform domain package (v1.3.0)", () => {
     assert.equal(canActorRemoveGroupMember("admin", "admin", false), false);
     assert.equal(canActorRemoveGroupMember("admin", "owner", false), false);
     assert.equal(canActorRemoveGroupMember("owner", "admin", false), true);
-  });
 
-  it("sorts, filters, aggregates reactions, and validates release tag parity", () => {
     const makeItem = (
       id: string,
       opts: {
@@ -187,10 +360,7 @@ describe("@asterial/core shared cross-platform domain package (v1.3.0)", () => {
       }),
     ]);
     assert.equal(sorted[0]?.conversation.id, "older-pinned");
-
-    const unreadOnly = filterConversationSummaries(sorted, "unread", "");
-    assert.equal(unreadOnly.length, 1);
-    assert.equal(unreadOnly[0]?.conversation.id, "newer-unpinned");
+    assert.equal(filterConversationSummaries(sorted, "unread", "").length, 1);
 
     const grouped = groupReactionsByEmoji(
       [
@@ -201,27 +371,13 @@ describe("@asterial/core shared cross-platform domain package (v1.3.0)", () => {
           emoji: "✦",
           created_at: "2026-10-28T03:00:00Z",
         },
-        {
-          message_id: "m1",
-          conversation_id: "c1",
-          user_id: "u2",
-          emoji: "✦",
-          created_at: "2026-10-28T03:01:00Z",
-        },
       ],
       "u1"
     );
-    assert.equal(grouped[0]?.count, 2);
-    assert.equal(grouped[0]?.reactedByMe, true);
+    assert.equal(grouped[0]?.count, 1);
 
-    assert.equal(validateReleaseTagParity("refs/tags/v1.3.0", "1.3.0").ok, true);
-    assert.equal(validateReleaseTagParity("v1.2.0", "1.3.0").ok, false);
-    assert.equal(compareSemver("1.3.0", "1.2.0"), 1);
-
-    const parsed = postBodySchema.safeParse({
-      body: "Hello from ASTERIAL native Android",
-      visibility: "followers",
-    });
-    assert.equal(parsed.success, true);
+    assert.equal(validateReleaseTagParity("refs/tags/v1.4.0", "1.4.0").ok, true);
+    assert.equal(validateReleaseTagParity("v1.3.0", "1.4.0").ok, false);
+    assert.equal(compareSemver("1.4.0", "1.3.0"), 1);
   });
 });

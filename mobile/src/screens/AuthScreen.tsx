@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -12,16 +12,23 @@ import {
 } from "react-native";
 import {
   ASTERIAL_BRAND,
+  classifyAuthError,
   loginSchema,
   passwordUpdateSchema,
   resetRequestSchema,
   signupSchema,
   usernameSchema,
 } from "@asterial/core";
-import { BrandLockup } from "../components/AsterialEmblem";
+import { AsterialEmblem } from "../components/AsterialEmblem";
+import { MOBILE_ENV } from "../config/env";
 import { useMobileWorkspace } from "../context/MobileWorkspaceContext";
+import {
+  ensureMobileSupabaseClient,
+  verifySupabaseAuthConnectivity,
+  type AuthConnectivityStatus,
+} from "../lib/supabase";
 
-type AuthViewMode = "signin" | "signup" | "reset_request" | "verify_pending";
+type AuthMode = "signin" | "signup" | "forgot" | "recovery";
 
 export function AuthScreen({
   forceRecoveryMode = false,
@@ -31,163 +38,230 @@ export function AuthScreen({
   const {
     supabase,
     palette,
+    isOnline,
     sessionNotice,
     clearSessionNotice,
     exitPasswordRecovery,
-    refreshWorkspace,
+    retryBootstrap,
     showToast,
   } = useMobileWorkspace();
 
-  const [mode, setMode] = useState<AuthViewMode>("signin");
+  const [mode, setMode] = useState<AuthMode>(
+    forceRecoveryMode ? "recovery" : "signin"
+  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  const [usernameState, setUsernameState] = useState<
+  const [usernameAvailability, setUsernameAvailability] = useState<
     "idle" | "checking" | "available" | "taken" | "invalid"
   >("idle");
   const [submitting, setSubmitting] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [infoMsg, setInfoMsg] = useState<string | null>(null);
+  const [errorText, setErrorText] = useState<string | null>(null);
+  const [retryableError, setRetryableError] = useState(false);
+  const [infoText, setInfoText] = useState<string | null>(null);
+  const [connectivity, setConnectivity] =
+    useState<AuthConnectivityStatus | null>(null);
+  const [checkingConn, setCheckingConn] = useState(false);
 
-  const activeRecovery = forceRecoveryMode;
+  const inFlightRef = useRef(false);
 
-  // Live @username availability check during registration
+  const runHealthCheck = useCallback(async () => {
+    setCheckingConn(true);
+    try {
+      const status = await verifySupabaseAuthConnectivity();
+      setConnectivity(status);
+    } finally {
+      setCheckingConn(false);
+    }
+  }, []);
+
   useEffect(() => {
-    if (mode !== "signup" || activeRecovery || !supabase) return;
-    const cleaned = username.trim().toLowerCase();
-    if (!cleaned) return;
+    const id = setTimeout(() => {
+      void runHealthCheck();
+    }, 0);
+    return () => clearTimeout(id);
+  }, [runHealthCheck]);
 
-    const valid = usernameSchema.safeParse(cleaned);
+  // Live @username availability verification during registration
+  useEffect(() => {
+    if (mode !== "signup") return;
+    const normalized = username.trim().toLowerCase();
+    if (!normalized) return;
+
+    const valid = usernameSchema.safeParse(normalized);
     if (!valid.success) return;
 
-    let active = true;
+    let cancelled = false;
     const timer = setTimeout(async () => {
-      setUsernameState("checking");
-      const { data, error } = await supabase.rpc("check_username_available", {
-        p_username: cleaned,
-      });
-      if (!active) return;
-      if (error) {
-        setUsernameState("idle");
-        return;
+      if (!supabase) return;
+      if (!cancelled) setUsernameAvailability("checking");
+      try {
+        const { data, error } = await supabase.rpc("check_username_available", {
+          p_username: normalized,
+        });
+        if (cancelled) return;
+        if (error) {
+          setUsernameAvailability("idle");
+        } else {
+          setUsernameAvailability(data ? "available" : "taken");
+        }
+      } catch {
+        if (!cancelled) setUsernameAvailability("idle");
       }
-      setUsernameState(data ? "available" : "taken");
-    }, 300);
+    }, 320);
 
     return () => {
-      active = false;
+      cancelled = true;
       clearTimeout(timer);
     };
-  }, [activeRecovery, mode, supabase, username]);
+  }, [mode, supabase, username]);
 
-  const computedUsernameStatus = (() => {
-    const cleaned = username.trim().toLowerCase();
-    if (!cleaned) return null;
-    if (!usernameSchema.safeParse(cleaned).success) {
-      return {
-        color: palette.danger,
-        label: "Use 3–24 lowercase letters, numbers, or underscores.",
-      };
-    }
-    if (usernameState === "checking") {
-      return { color: palette.textMuted, label: "Checking @username…" };
-    }
-    if (usernameState === "available") {
-      return { color: palette.success, label: `@${cleaned} is available` };
-    }
-    if (usernameState === "taken") {
-      return { color: palette.danger, label: `@${cleaned} is already taken` };
-    }
-    return null;
-  })();
-
-  const switchMode = (next: AuthViewMode) => {
-    setMode(next);
-    setErrorMsg(null);
-    setInfoMsg(null);
+  const switchMode = (next: AuthMode) => {
+    if (inFlightRef.current) return;
     clearSessionNotice();
+    setErrorText(null);
+    setRetryableError(false);
+    setInfoText(null);
+    setMode(next);
+  };
+
+  const resolveActiveClient = async () => {
+    if (supabase) return supabase;
+    return ensureMobileSupabaseClient({ forceRemoteRefresh: true });
+  };
+
+  const applyClassifiedError = (err: unknown) => {
+    const classified = classifyAuthError(err, isOnline);
+    setErrorText(classified.userMessage);
+    setRetryableError(classified.retryable);
+  };
+
+  const handleRetryConnection = async () => {
+    if (checkingConn || submitting) return;
+    setErrorText(null);
+    setCheckingConn(true);
+    try {
+      await ensureMobileSupabaseClient({ forceRemoteRefresh: true });
+      await retryBootstrap();
+      const status = await verifySupabaseAuthConnectivity();
+      setConnectivity(status);
+      if (status.ok) {
+        showToast("Authentication service connected.", "success");
+      } else if (status.detail) {
+        setErrorText(status.detail);
+        setRetryableError(true);
+      }
+    } finally {
+      setCheckingConn(false);
+    }
   };
 
   const handleSignIn = async () => {
-    if (!supabase) return;
-    setErrorMsg(null);
-    setInfoMsg(null);
+    if (inFlightRef.current) return;
     clearSessionNotice();
+    setErrorText(null);
+    setRetryableError(false);
+    setInfoText(null);
 
-    const parsed = loginSchema.safeParse({ email, password });
+    const parsed = loginSchema.safeParse({
+      email: email.trim(),
+      password,
+    });
     if (!parsed.success) {
-      setErrorMsg(parsed.error.issues[0]?.message || "Check your credentials.");
+      setErrorText(
+        parsed.error.issues[0]?.message || "Enter a valid email and password."
+      );
       return;
     }
 
+    if (!isOnline) {
+      applyClassifiedError(new Error("Offline"));
+      return;
+    }
+
+    inFlightRef.current = true;
     setSubmitting(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const client = await resolveActiveClient();
+      if (!client) {
+        throw new Error("Workspace connection unavailable");
+      }
+
+      const { error } = await client.auth.signInWithPassword({
         email: parsed.data.email,
         password: parsed.data.password,
       });
+
       if (error) {
-        const lower = error.message.toLowerCase();
-        if (lower.includes("email not confirmed")) {
-          setMode("verify_pending");
-          setInfoMsg(
-            "Please confirm your email address first, or resend the confirmation email below."
-          );
-          return;
-        }
-        setErrorMsg(
-          lower.includes("invalid login")
-            ? "Incorrect email or password."
-            : error.message
-        );
+        applyClassifiedError(error);
+        return;
       }
+
+      showToast("Signed in to ASTERIAL.", "success");
+    } catch (err) {
+      applyClassifiedError(err);
     } finally {
       setSubmitting(false);
+      inFlightRef.current = false;
     }
   };
 
   const handleSignUp = async () => {
-    if (!supabase) return;
-    setErrorMsg(null);
-    setInfoMsg(null);
+    if (inFlightRef.current) return;
     clearSessionNotice();
+    setErrorText(null);
+    setRetryableError(false);
+    setInfoText(null);
 
+    const cleanUsername = username.trim().toLowerCase();
     const parsed = signupSchema.safeParse({
-      email,
+      username: cleanUsername,
+      displayName: displayName.trim(),
+      email: email.trim(),
       password,
-      displayName,
-      username,
     });
     if (!parsed.success) {
-      setErrorMsg(parsed.error.issues[0]?.message || "Check registration fields.");
+      setErrorText(
+        parsed.error.issues[0]?.message ||
+          "Check your registration details and try again."
+      );
+      return;
+    }
+    if (usernameAvailability === "taken") {
+      setErrorText("That @username is already taken. Choose another handle.");
+      return;
+    }
+    if (!isOnline) {
+      applyClassifiedError(new Error("Offline"));
       return;
     }
 
-    if (usernameState === "taken") {
-      setErrorMsg(`@${parsed.data.username} is already taken.`);
-      return;
-    }
-
+    inFlightRef.current = true;
     setSubmitting(true);
     try {
-      const { data: avail } = await supabase.rpc("check_username_available", {
+      const client = await resolveActiveClient();
+      if (!client) {
+        throw new Error("Workspace connection unavailable");
+      }
+
+      const { data: avail } = await client.rpc("check_username_available", {
         p_username: parsed.data.username,
       });
       if (avail === false) {
-        setUsernameState("taken");
-        setErrorMsg(`@${parsed.data.username} is already taken.`);
+        setUsernameAvailability("taken");
+        setErrorText("That @username was just claimed. Pick another handle.");
         return;
       }
 
-      const { data, error } = await supabase.auth.signUp({
+      const { data, error } = await client.auth.signUp({
         email: parsed.data.email,
         password: parsed.data.password,
         options: {
-          emailRedirectTo: "asterial://auth/callback",
+          emailRedirectTo: MOBILE_ENV.authCallbackRedirectUrl,
           data: {
             username: parsed.data.username,
             display_name: parsed.data.displayName,
@@ -196,609 +270,599 @@ export function AuthScreen({
       });
 
       if (error) {
-        setErrorMsg(error.message);
+        applyClassifiedError(error);
         return;
       }
 
       if (data.session) {
-        showToast("Welcome to ASTERIAL.", "success");
-      } else {
-        setMode("verify_pending");
-        setInfoMsg(
-          `Confirmation link sent to ${parsed.data.email}. Open it on this Android device to sign in automatically.`
-        );
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleRequestReset = async () => {
-    if (!supabase) return;
-    setErrorMsg(null);
-    setInfoMsg(null);
-
-    const parsed = resetRequestSchema.safeParse({ email });
-    if (!parsed.success) {
-      setErrorMsg(parsed.error.issues[0]?.message || "Enter a valid email.");
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(
-        parsed.data.email,
-        {
-          redirectTo: "asterial://auth/callback?type=recovery",
+        try {
+          await client.rpc("complete_profile_onboarding", {
+            p_username: parsed.data.username,
+            p_display_name: parsed.data.displayName,
+            p_bio: "",
+            p_status_text: "",
+          });
+        } catch {
+          // Non-fatal: OnboardingScreen fallback will handle if needed
         }
-      );
-      if (error) {
-        setErrorMsg(error.message);
+        showToast("Welcome to ASTERIAL.", "success");
         return;
       }
-      setInfoMsg(
-        `Password recovery instructions sent to ${parsed.data.email}. Tap the recovery link in your email to set a new password here.`
+
+      setInfoText(
+        `Account registered for ${parsed.data.email}. Open the confirmation link sent to your inbox to activate sign-in.`
       );
+      setMode("signin");
+    } catch (err) {
+      applyClassifiedError(err);
     } finally {
       setSubmitting(false);
+      inFlightRef.current = false;
     }
   };
 
-  const handleResendConfirmation = async () => {
-    if (!supabase || !email.trim()) {
-      setErrorMsg("Enter your email address above first.");
+  const handleForgotPassword = async () => {
+    if (inFlightRef.current) return;
+    clearSessionNotice();
+    setErrorText(null);
+    setRetryableError(false);
+    setInfoText(null);
+
+    const parsed = resetRequestSchema.safeParse({ email: email.trim() });
+    if (!parsed.success) {
+      setErrorText(
+        parsed.error.issues[0]?.message || "Enter your account email address."
+      );
       return;
     }
+    if (!isOnline) {
+      applyClassifiedError(new Error("Offline"));
+      return;
+    }
+
+    inFlightRef.current = true;
     setSubmitting(true);
-    setErrorMsg(null);
     try {
-      const { error } = await supabase.auth.resend({
-        type: "signup",
-        email: email.trim().toLowerCase(),
-        options: { emailRedirectTo: "asterial://auth/callback" },
-      });
-      if (error) {
-        setErrorMsg(error.message);
-      } else {
-        setInfoMsg("Fresh confirmation email sent.");
+      const client = await resolveActiveClient();
+      if (!client) {
+        throw new Error("Workspace connection unavailable");
       }
+
+      const { error } = await client.auth.resetPasswordForEmail(
+        parsed.data.email,
+        {
+          redirectTo: `${MOBILE_ENV.authCallbackRedirectUrl}?type=recovery`,
+        }
+      );
+
+      if (error) {
+        applyClassifiedError(error);
+        return;
+      }
+
+      setInfoText(
+        "If an account exists for that email, a password recovery link has been sent."
+      );
+    } catch (err) {
+      applyClassifiedError(err);
     } finally {
       setSubmitting(false);
+      inFlightRef.current = false;
     }
   };
 
-  const handleUpdatePassword = async () => {
-    if (!supabase) return;
-    setErrorMsg(null);
-    setInfoMsg(null);
+  const handleUpdateRecoveredPassword = async () => {
+    if (inFlightRef.current) return;
+    setErrorText(null);
+    setRetryableError(false);
 
     const parsed = passwordUpdateSchema.safeParse({
       password,
       confirmPassword,
     });
     if (!parsed.success) {
-      setErrorMsg(
-        parsed.error.issues[0]?.message || "Check your new password."
+      setErrorText(
+        parsed.error.issues[0]?.message || "Passwords must match (8+ chars)."
       );
       return;
     }
 
+    inFlightRef.current = true;
     setSubmitting(true);
     try {
-      const { error } = await supabase.auth.updateUser({
+      const client = await resolveActiveClient();
+      if (!client) {
+        throw new Error("Workspace connection unavailable");
+      }
+
+      const { error } = await client.auth.updateUser({
         password: parsed.data.password,
       });
+
       if (error) {
-        setErrorMsg(error.message);
+        applyClassifiedError(error);
         return;
       }
-      setPassword("");
-      setConfirmPassword("");
-      exitPasswordRecovery();
+
       showToast("Password updated.", "success");
-      await refreshWorkspace();
+      exitPasswordRecovery();
+    } catch (err) {
+      applyClassifiedError(err);
     } finally {
       setSubmitting(false);
+      inFlightRef.current = false;
     }
   };
 
+  const activeMode: AuthMode = forceRecoveryMode ? "recovery" : mode;
+  const trimmedUser = username.trim().toLowerCase();
+  const effectiveUsernameStatus = !trimmedUser
+    ? "idle"
+    : !usernameSchema.safeParse(trimmedUser).success
+      ? "invalid"
+      : usernameAvailability;
+
   return (
     <KeyboardAvoidingView
-      style={[styles.flex, { backgroundColor: palette.bgVoid }]}
+      style={[styles.flex, { backgroundColor: palette.bgCanvas }]}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
       >
-        <View style={styles.brandSection}>
-          <BrandLockup
-            palette={palette}
-            subtitle={`Private Real-Time Messaging · ${ASTERIAL_BRAND.attribution}`}
-          />
-        </View>
+        <View style={styles.brandHeader}>
+          <AsterialEmblem palette={palette} size={50} />
+          <Text style={[styles.brandName, { color: palette.textPrimary }]}>
+            {ASTERIAL_BRAND.name}
+          </Text>
+          <Text style={[styles.brandSub, { color: palette.textSecondary }]}>
+            {ASTERIAL_BRAND.tagline}
+          </Text>
+          <View style={styles.badgeRow}>
+            <View
+              style={[
+                styles.versionPill,
+                {
+                  backgroundColor: palette.bgSurface,
+                  borderColor: palette.borderStrong,
+                },
+              ]}
+            >
+              <Text
+                style={[styles.versionPillText, { color: palette.textPrimary }]}
+              >
+                v{ASTERIAL_BRAND.version} · {ASTERIAL_BRAND.attribution}
+              </Text>
+            </View>
 
-        {sessionNotice ? (
-          <View
-            style={[
-              styles.noticeCard,
-              {
-                backgroundColor: palette.bgSurface,
-                borderColor: palette.accent,
-              },
-            ]}
-          >
-            <Text style={[styles.noticeText, { color: palette.textPrimary }]}>
-              {sessionNotice}
-            </Text>
+            <Pressable
+              onPress={() => void handleRetryConnection()}
+              accessibilityRole="button"
+              accessibilityLabel="Verify authentication server status"
+              style={[
+                styles.connPill,
+                {
+                  backgroundColor: palette.bgSurface,
+                  borderColor: palette.borderSubtle,
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.connDot,
+                  {
+                    backgroundColor: !isOnline
+                      ? palette.danger
+                      : connectivity?.ok
+                        ? palette.success
+                        : palette.textMuted,
+                  },
+                ]}
+              />
+              <Text
+                style={[styles.connPillText, { color: palette.textSecondary }]}
+              >
+                {checkingConn
+                  ? "Verifying TLS…"
+                  : !isOnline
+                    ? "Offline"
+                    : connectivity?.ok
+                      ? "Auth TLS Ready"
+                      : "Tap to Verify"}
+              </Text>
+            </Pressable>
           </View>
-        ) : null}
+        </View>
 
         <View
           style={[
-            styles.authCard,
+            styles.card,
             {
               backgroundColor: palette.bgSurface,
               borderColor: palette.borderSubtle,
             },
           ]}
         >
-          {activeRecovery ? (
-            <>
-              <Text style={[styles.eyebrow, { color: palette.accent }]}>
-                ACCOUNT RECOVERY
-              </Text>
-              <Text style={[styles.heading, { color: palette.textPrimary }]}>
+          {activeMode !== "recovery" ? (
+            <View
+              style={[
+                styles.segmentedTabs,
+                {
+                  backgroundColor: palette.bgCanvas,
+                  borderColor: palette.borderSubtle,
+                },
+              ]}
+            >
+              <Pressable
+                onPress={() => switchMode("signin")}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: activeMode === "signin" }}
+                style={[
+                  styles.segmentBtn,
+                  activeMode === "signin" && {
+                    backgroundColor: palette.accentBg,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.segmentText,
+                    {
+                      color:
+                        activeMode === "signin"
+                          ? palette.accentFg
+                          : palette.textSecondary,
+                    },
+                  ]}
+                >
+                  Sign In
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => switchMode("signup")}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: activeMode === "signup" }}
+                style={[
+                  styles.segmentBtn,
+                  activeMode === "signup" && {
+                    backgroundColor: palette.accentBg,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.segmentText,
+                    {
+                      color:
+                        activeMode === "signup"
+                          ? palette.accentFg
+                          : palette.textSecondary,
+                    },
+                  ]}
+                >
+                  Create Account
+                </Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={{ marginBottom: 14 }}>
+              <Text
+                style={[styles.recoveryTitle, { color: palette.textPrimary }]}
+              >
                 Set New Password
               </Text>
-              <Text style={[styles.subheading, { color: palette.textSecondary }]}>
-                Choose a strong password (at least 8 characters with letters and
-                numbers).
-              </Text>
-
-              <Text style={[styles.fieldLabel, { color: palette.textSecondary }]}>
-                New Password
-              </Text>
-              <View
-                style={[
-                  styles.passwordWrap,
-                  {
-                    backgroundColor: palette.bgElevated,
-                    borderColor: palette.borderSubtle,
-                  },
-                ]}
+              <Text
+                style={[styles.recoveryDesc, { color: palette.textSecondary }]}
               >
-                <TextInput
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder="Minimum 8 characters"
-                  placeholderTextColor={palette.textMuted}
-                  secureTextEntry={!showPassword}
-                  autoCapitalize="none"
-                  accessibilityLabel="New password"
-                  style={[styles.passwordInput, { color: palette.textPrimary }]}
-                />
+                Choose a strong password (minimum 8 characters) to secure your
+                account.
+              </Text>
+            </View>
+          )}
+
+          {sessionNotice ? (
+            <View
+              style={[
+                styles.noticeBox,
+                {
+                  backgroundColor: palette.accentSoft,
+                  borderColor: palette.borderStrong,
+                },
+              ]}
+            >
+              <Text style={[styles.noticeText, { color: palette.textPrimary }]}>
+                {sessionNotice}
+              </Text>
+            </View>
+          ) : null}
+
+          {infoText ? (
+            <View
+              style={[
+                styles.noticeBox,
+                {
+                  backgroundColor: palette.accentSoft,
+                  borderColor: palette.borderStrong,
+                },
+              ]}
+            >
+              <Text style={[styles.noticeText, { color: palette.textPrimary }]}>
+                {infoText}
+              </Text>
+            </View>
+          ) : null}
+
+          {errorText ? (
+            <View
+              style={[
+                styles.errorBox,
+                {
+                  backgroundColor: "rgba(239, 68, 68, 0.12)",
+                  borderColor: palette.danger,
+                },
+              ]}
+            >
+              <Text style={[styles.errorText, { color: palette.danger }]}>
+                {errorText}
+              </Text>
+              {retryableError ? (
                 <Pressable
-                  onPress={() => setShowPassword((v) => !v)}
-                  accessibilityRole="button"
-                  accessibilityLabel={
-                    showPassword ? "Hide password" : "Show password"
-                  }
-                  style={styles.toggleBtn}
-                >
-                  <Text style={{ color: palette.accent, fontWeight: "700", fontSize: 12 }}>
-                    {showPassword ? "Hide" : "Show"}
-                  </Text>
-                </Pressable>
-              </View>
-
-              <Text style={[styles.fieldLabel, { color: palette.textSecondary }]}>
-                Confirm Password
-              </Text>
-              <TextInput
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                placeholder="Re-enter new password"
-                placeholderTextColor={palette.textMuted}
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-                accessibilityLabel="Confirm new password"
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: palette.bgElevated,
-                    borderColor: palette.borderSubtle,
-                    color: palette.textPrimary,
-                  },
-                ]}
-              />
-
-              {errorMsg ? (
-                <Text style={[styles.errorText, { color: palette.danger }]}>
-                  {errorMsg}
-                </Text>
-              ) : null}
-
-              <Pressable
-                onPress={() => void handleUpdatePassword()}
-                disabled={submitting}
-                accessibilityRole="button"
-                style={[styles.submitBtn, { backgroundColor: palette.accent }]}
-              >
-                {submitting ? (
-                  <ActivityIndicator color={palette.accentFg} size="small" />
-                ) : (
-                  <Text style={[styles.submitBtnText, { color: palette.accentFg }]}>
-                    Update Password
-                  </Text>
-                )}
-              </Pressable>
-            </>
-          ) : mode === "reset_request" ? (
-            <>
-              <Text style={[styles.eyebrow, { color: palette.accent }]}>
-                PASSWORD RECOVERY
-              </Text>
-              <Text style={[styles.heading, { color: palette.textPrimary }]}>
-                Reset your password
-              </Text>
-              <Text style={[styles.subheading, { color: palette.textSecondary }]}>
-                Enter the email linked to your ASTERIAL account to receive a
-                recovery deep link.
-              </Text>
-
-              <Text style={[styles.fieldLabel, { color: palette.textSecondary }]}>
-                Email Address
-              </Text>
-              <TextInput
-                value={email}
-                onChangeText={setEmail}
-                placeholder="you@example.com"
-                placeholderTextColor={palette.textMuted}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                accessibilityLabel="Email address"
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: palette.bgElevated,
-                    borderColor: palette.borderSubtle,
-                    color: palette.textPrimary,
-                  },
-                ]}
-              />
-
-              {errorMsg ? (
-                <Text style={[styles.errorText, { color: palette.danger }]}>
-                  {errorMsg}
-                </Text>
-              ) : null}
-              {infoMsg ? (
-                <Text style={[styles.infoText, { color: palette.success }]}>
-                  {infoMsg}
-                </Text>
-              ) : null}
-
-              <Pressable
-                onPress={() => void handleRequestReset()}
-                disabled={submitting}
-                accessibilityRole="button"
-                style={[styles.submitBtn, { backgroundColor: palette.accent }]}
-              >
-                {submitting ? (
-                  <ActivityIndicator color={palette.accentFg} size="small" />
-                ) : (
-                  <Text style={[styles.submitBtnText, { color: palette.accentFg }]}>
-                    Send Recovery Link
-                  </Text>
-                )}
-              </Pressable>
-
-              <Pressable
-                onPress={() => switchMode("signin")}
-                style={styles.textLinkBtn}
-              >
-                <Text style={{ color: palette.textSecondary, fontWeight: "600" }}>
-                  ← Back to Sign In
-                </Text>
-              </Pressable>
-            </>
-          ) : mode === "verify_pending" ? (
-            <>
-              <Text style={[styles.eyebrow, { color: palette.accent }]}>
-                EMAIL CONFIRMATION
-              </Text>
-              <Text style={[styles.heading, { color: palette.textPrimary }]}>
-                Confirm your email
-              </Text>
-              <Text style={[styles.subheading, { color: palette.textSecondary }]}>
-                {infoMsg ||
-                  "Open the confirmation link sent to your inbox. ASTERIAL will complete sign-in automatically."}
-              </Text>
-
-              {errorMsg ? (
-                <Text style={[styles.errorText, { color: palette.danger }]}>
-                  {errorMsg}
-                </Text>
-              ) : null}
-
-              <Pressable
-                onPress={() => void handleResendConfirmation()}
-                disabled={submitting}
-                style={[styles.submitBtn, { backgroundColor: palette.accent }]}
-              >
-                {submitting ? (
-                  <ActivityIndicator color={palette.accentFg} size="small" />
-                ) : (
-                  <Text style={[styles.submitBtnText, { color: palette.accentFg }]}>
-                    Resend Confirmation Email
-                  </Text>
-                )}
-              </Pressable>
-
-              <Pressable
-                onPress={() => switchMode("signin")}
-                style={styles.textLinkBtn}
-              >
-                <Text style={{ color: palette.textSecondary, fontWeight: "600" }}>
-                  ← Return to Sign In
-                </Text>
-              </Pressable>
-            </>
-          ) : (
-            <>
-              <View
-                style={[
-                  styles.segmentBar,
-                  {
-                    backgroundColor: palette.bgElevated,
-                    borderColor: palette.borderSubtle,
-                  },
-                ]}
-              >
-                <Pressable
-                  onPress={() => switchMode("signin")}
-                  accessibilityRole="tab"
-                  accessibilityState={{ selected: mode === "signin" }}
+                  onPress={() => void handleRetryConnection()}
                   style={[
-                    styles.segmentItem,
-                    mode === "signin" && {
-                      backgroundColor: palette.accent,
-                    },
+                    styles.inlineRetryBtn,
+                    { borderColor: palette.borderStrong },
                   ]}
-                >
-                  <Text
-                    style={[
-                      styles.segmentLabel,
-                      {
-                        color:
-                          mode === "signin"
-                            ? palette.accentFg
-                            : palette.textSecondary,
-                      },
-                    ]}
-                  >
-                    Sign In
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => switchMode("signup")}
-                  accessibilityRole="tab"
-                  accessibilityState={{ selected: mode === "signup" }}
-                  style={[
-                    styles.segmentItem,
-                    mode === "signup" && {
-                      backgroundColor: palette.accent,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.segmentLabel,
-                      {
-                        color:
-                          mode === "signup"
-                            ? palette.accentFg
-                            : palette.textSecondary,
-                      },
-                    ]}
-                  >
-                    Create Account
-                  </Text>
-                </Pressable>
-              </View>
-
-              {mode === "signup" ? (
-                <>
-                  <Text
-                    style={[styles.fieldLabel, { color: palette.textSecondary }]}
-                  >
-                    Display Name
-                  </Text>
-                  <TextInput
-                    value={displayName}
-                    onChangeText={setDisplayName}
-                    placeholder="Your name"
-                    placeholderTextColor={palette.textMuted}
-                    maxLength={60}
-                    accessibilityLabel="Display name"
-                    style={[
-                      styles.input,
-                      {
-                        backgroundColor: palette.bgElevated,
-                        borderColor: palette.borderSubtle,
-                        color: palette.textPrimary,
-                      },
-                    ]}
-                  />
-
-                  <Text
-                    style={[styles.fieldLabel, { color: palette.textSecondary }]}
-                  >
-                    Username
-                  </Text>
-                  <TextInput
-                    value={username}
-                    onChangeText={(txt) =>
-                      setUsername(txt.toLowerCase().replace(/[^a-z0-9_]/g, ""))
-                    }
-                    placeholder="unique_handle"
-                    placeholderTextColor={palette.textMuted}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    maxLength={24}
-                    accessibilityLabel="Username"
-                    style={[
-                      styles.input,
-                      {
-                        backgroundColor: palette.bgElevated,
-                        borderColor: palette.borderSubtle,
-                        color: palette.textPrimary,
-                      },
-                    ]}
-                  />
-                  {computedUsernameStatus ? (
-                    <Text
-                      style={{
-                        marginTop: 5,
-                        fontSize: 11.5,
-                        fontWeight: "600",
-                        color: computedUsernameStatus.color,
-                      }}
-                    >
-                      {computedUsernameStatus.label}
-                    </Text>
-                  ) : null}
-                </>
-              ) : null}
-
-              <Text style={[styles.fieldLabel, { color: palette.textSecondary }]}>
-                Email Address
-              </Text>
-              <TextInput
-                value={email}
-                onChangeText={setEmail}
-                placeholder="you@example.com"
-                placeholderTextColor={palette.textMuted}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                accessibilityLabel="Email address"
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: palette.bgElevated,
-                    borderColor: palette.borderSubtle,
-                    color: palette.textPrimary,
-                  },
-                ]}
-              />
-
-              <View style={styles.labelRowBetween}>
-                <Text
-                  style={[styles.fieldLabel, { color: palette.textSecondary }]}
-                >
-                  Password
-                </Text>
-                {mode === "signin" ? (
-                  <Pressable onPress={() => switchMode("reset_request")}>
-                    <Text
-                      style={{
-                        marginTop: 12,
-                        fontSize: 12,
-                        fontWeight: "700",
-                        color: palette.accent,
-                      }}
-                    >
-                      Forgot password?
-                    </Text>
-                  </Pressable>
-                ) : null}
-              </View>
-
-              <View
-                style={[
-                  styles.passwordWrap,
-                  {
-                    backgroundColor: palette.bgElevated,
-                    borderColor: palette.borderSubtle,
-                  },
-                ]}
-              >
-                <TextInput
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder={
-                    mode === "signup"
-                      ? "8+ chars with letters & numbers"
-                      : "Enter your password"
-                  }
-                  placeholderTextColor={palette.textMuted}
-                  secureTextEntry={!showPassword}
-                  autoCapitalize="none"
-                  accessibilityLabel="Password"
-                  style={[styles.passwordInput, { color: palette.textPrimary }]}
-                />
-                <Pressable
-                  onPress={() => setShowPassword((v) => !v)}
-                  accessibilityRole="button"
-                  accessibilityLabel={
-                    showPassword ? "Hide password" : "Show password"
-                  }
-                  style={styles.toggleBtn}
                 >
                   <Text
                     style={{
-                      color: palette.accent,
-                      fontWeight: "700",
+                      color: palette.textPrimary,
                       fontSize: 12,
+                      fontWeight: "700",
+                    }}
+                  >
+                    {checkingConn ? "Reconnecting…" : "Retry Connection"}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
+
+          {activeMode === "signup" ? (
+            <>
+              <Text style={[styles.label, { color: palette.textSecondary }]}>
+                Username (@handle)
+              </Text>
+              <TextInput
+                value={username}
+                onChangeText={(v) => {
+                  const clean = v.toLowerCase().replace(/[^a-z0-9_]/g, "");
+                  setUsername(clean);
+                  if (!clean) {
+                    setUsernameAvailability("idle");
+                  }
+                }}
+                autoCapitalize="none"
+                autoCorrect={false}
+                placeholder="e.g. ritam_das"
+                placeholderTextColor={palette.textMuted}
+                maxLength={24}
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: palette.bgCanvas,
+                    borderColor: palette.borderSubtle,
+                    color: palette.textPrimary,
+                  },
+                ]}
+              />
+              {effectiveUsernameStatus !== "idle" ? (
+                <Text
+                  style={[
+                    styles.helperText,
+                    {
+                      color:
+                        effectiveUsernameStatus === "available"
+                          ? palette.success
+                          : effectiveUsernameStatus === "checking"
+                            ? palette.textMuted
+                            : palette.danger,
+                    },
+                  ]}
+                >
+                  {effectiveUsernameStatus === "checking"
+                    ? "Checking handle availability…"
+                    : effectiveUsernameStatus === "available"
+                      ? `@${trimmedUser} is available`
+                      : effectiveUsernameStatus === "taken"
+                        ? `@${trimmedUser} is already taken`
+                        : "Use 3–24 lowercase letters, numbers, or underscores"}
+                </Text>
+              ) : null}
+
+              <Text style={[styles.label, { color: palette.textSecondary }]}>
+                Display Name
+              </Text>
+              <TextInput
+                value={displayName}
+                onChangeText={setDisplayName}
+                placeholder="Your full name or alias"
+                placeholderTextColor={palette.textMuted}
+                maxLength={60}
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: palette.bgCanvas,
+                    borderColor: palette.borderSubtle,
+                    color: palette.textPrimary,
+                  },
+                ]}
+              />
+            </>
+          ) : null}
+
+          {activeMode !== "recovery" ? (
+            <>
+              <Text style={[styles.label, { color: palette.textSecondary }]}>
+                Email Address
+              </Text>
+              <TextInput
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                placeholder="you@domain.com"
+                placeholderTextColor={palette.textMuted}
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: palette.bgCanvas,
+                    borderColor: palette.borderSubtle,
+                    color: palette.textPrimary,
+                  },
+                ]}
+              />
+            </>
+          ) : null}
+
+          {activeMode !== "forgot" ? (
+            <>
+              <View style={styles.passwordHeaderRow}>
+                <Text style={[styles.label, { color: palette.textSecondary }]}>
+                  {activeMode === "recovery" ? "New Password" : "Password"}
+                </Text>
+                <Pressable onPress={() => setShowPassword((p) => !p)}>
+                  <Text
+                    style={{
+                      color: palette.textSecondary,
+                      fontSize: 12,
+                      fontWeight: "700",
                     }}
                   >
                     {showPassword ? "Hide" : "Show"}
                   </Text>
                 </Pressable>
               </View>
-
-              {errorMsg ? (
-                <Text style={[styles.errorText, { color: palette.danger }]}>
-                  {errorMsg}
-                </Text>
-              ) : null}
-              {infoMsg ? (
-                <Text style={[styles.infoText, { color: palette.success }]}>
-                  {infoMsg}
-                </Text>
-              ) : null}
-
-              <Pressable
-                onPress={() =>
-                  void (mode === "signin" ? handleSignIn() : handleSignUp())
+              <TextInput
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                placeholder={
+                  activeMode === "signin"
+                    ? "Enter your password"
+                    : "Minimum 8 characters"
                 }
-                disabled={submitting}
-                accessibilityRole="button"
-                style={[styles.submitBtn, { backgroundColor: palette.accent }]}
-              >
-                {submitting ? (
-                  <ActivityIndicator color={palette.accentFg} size="small" />
-                ) : (
-                  <Text style={[styles.submitBtnText, { color: palette.accentFg }]}>
-                    {mode === "signin" ? "Sign In" : "Create ASTERIAL Account"}
-                  </Text>
-                )}
-              </Pressable>
+                placeholderTextColor={palette.textMuted}
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: palette.bgCanvas,
+                    borderColor: palette.borderSubtle,
+                    color: palette.textPrimary,
+                  },
+                ]}
+              />
             </>
-          )}
+          ) : null}
+
+          {activeMode === "recovery" ? (
+            <>
+              <Text style={[styles.label, { color: palette.textSecondary }]}>
+                Confirm New Password
+              </Text>
+              <TextInput
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                placeholder="Re-enter your new password"
+                placeholderTextColor={palette.textMuted}
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: palette.bgCanvas,
+                    borderColor: palette.borderSubtle,
+                    color: palette.textPrimary,
+                  },
+                ]}
+              />
+            </>
+          ) : null}
+
+          {activeMode === "signin" ? (
+            <Pressable
+              onPress={() => switchMode("forgot")}
+              style={styles.forgotLink}
+            >
+              <Text style={{ color: palette.textSecondary, fontSize: 12.5 }}>
+                Forgot password?
+              </Text>
+            </Pressable>
+          ) : null}
+
+          <Pressable
+            disabled={submitting}
+            onPress={() => {
+              if (activeMode === "signin") void handleSignIn();
+              else if (activeMode === "signup") void handleSignUp();
+              else if (activeMode === "forgot") void handleForgotPassword();
+              else void handleUpdateRecoveredPassword();
+            }}
+            accessibilityRole="button"
+            style={[
+              styles.submitBtn,
+              {
+                backgroundColor: palette.accentBg,
+                opacity: submitting ? 0.72 : 1,
+              },
+            ]}
+          >
+            {submitting ? (
+              <ActivityIndicator color={palette.accentFg} size="small" />
+            ) : (
+              <Text
+                style={[styles.submitBtnText, { color: palette.accentFg }]}
+              >
+                {activeMode === "signin"
+                  ? "Sign In"
+                  : activeMode === "signup"
+                    ? "Create Account"
+                    : activeMode === "forgot"
+                      ? "Send Recovery Link"
+                      : "Save New Password"}
+              </Text>
+            )}
+          </Pressable>
+
+          {activeMode === "forgot" ? (
+            <Pressable
+              onPress={() => switchMode("signin")}
+              style={styles.backToSignIn}
+            >
+              <Text
+                style={{
+                  color: palette.textSecondary,
+                  fontSize: 13,
+                  fontWeight: "600",
+                }}
+              >
+                ← Back to Sign In
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
 
         <View style={styles.footerBlock}>
-          <Text style={[styles.footerMeta, { color: palette.textMuted }]}>
-            {ASTERIAL_BRAND.name} v{ASTERIAL_BRAND.version} · Developer:{" "}
-            {ASTERIAL_BRAND.developer} · {ASTERIAL_BRAND.attribution}
+          <Text style={[styles.footerNote, { color: palette.textMuted }]}>
+            Protected in transit via HTTPS/TLS and governed by PostgreSQL Row
+            Level Security.
           </Text>
-          <Text style={[styles.footerSub, { color: palette.textMuted }]}>
-            Protected by TLS in transit & Supabase Row-Level Security
+          <Text style={[styles.footerCredit, { color: palette.textSecondary }]}>
+            Developer: {ASTERIAL_BRAND.developer} · {ASTERIAL_BRAND.attribution}
           </Text>
         </View>
       </ScrollView>
@@ -816,134 +880,178 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 28,
   },
-  brandSection: {
-    marginBottom: 20,
+  brandHeader: {
+    alignItems: "center",
+    marginBottom: 22,
   },
-  noticeCard: {
+  brandName: {
+    marginTop: 12,
+    fontSize: 25,
+    fontWeight: "800",
+    letterSpacing: 2.2,
+  },
+  brandSub: {
+    marginTop: 6,
+    fontSize: 13,
+    textAlign: "center",
+    lineHeight: 19,
+    maxWidth: 320,
+  },
+  badgeRow: {
+    marginTop: 12,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  versionPill: {
     borderWidth: 1,
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  versionPillText: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.4,
+  },
+  connPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+  },
+  connDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  connPillText: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  card: {
+    borderWidth: 1,
+    borderRadius: 22,
+    padding: 18,
+  },
+  segmentedTabs: {
+    flexDirection: "row",
+    borderRadius: 13,
+    borderWidth: 1,
+    padding: 3,
     marginBottom: 14,
   },
-  noticeText: {
-    fontSize: 12.5,
-    fontWeight: "600",
-    lineHeight: 18,
-  },
-  authCard: {
-    borderWidth: 1,
-    borderRadius: 24,
-    padding: 20,
-  },
-  eyebrow: {
-    fontSize: 10.5,
-    fontWeight: "800",
-    letterSpacing: 1.8,
-  },
-  heading: {
-    marginTop: 4,
-    fontSize: 22,
-    fontWeight: "800",
-  },
-  subheading: {
-    marginTop: 5,
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  segmentBar: {
-    flexDirection: "row",
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 3,
-    marginBottom: 6,
-  },
-  segmentItem: {
+  segmentBtn: {
     flex: 1,
-    borderRadius: 11,
+    borderRadius: 10,
     paddingVertical: 9,
     alignItems: "center",
   },
-  segmentLabel: {
+  segmentText: {
     fontSize: 13,
+    fontWeight: "700",
+  },
+  recoveryTitle: {
+    fontSize: 18,
     fontWeight: "800",
   },
-  labelRowBetween: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+  recoveryDesc: {
+    marginTop: 4,
+    fontSize: 12.5,
+    lineHeight: 18,
   },
-  fieldLabel: {
-    marginTop: 12,
-    marginBottom: 5,
+  noticeBox: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 11,
+    marginBottom: 12,
+  },
+  noticeText: {
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: "600",
+  },
+  errorBox: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    gap: 8,
+  },
+  errorText: {
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: "600",
+  },
+  inlineRetryBtn: {
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderRadius: 9,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+  },
+  label: {
+    marginTop: 10,
+    marginBottom: 6,
     fontSize: 12,
     fontWeight: "700",
+  },
+  passwordHeaderRow: {
+    marginTop: 10,
+    marginBottom: 6,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   input: {
     borderWidth: 1,
     borderRadius: 13,
-    paddingHorizontal: 13,
+    paddingHorizontal: 14,
     paddingVertical: 11,
-    fontSize: 14,
+    fontSize: 14.5,
   },
-  passwordWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderRadius: 13,
-    paddingLeft: 13,
-    paddingRight: 6,
-  },
-  passwordInput: {
-    flex: 1,
-    paddingVertical: 11,
-    fontSize: 14,
-  },
-  toggleBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  errorText: {
-    marginTop: 10,
-    fontSize: 12.5,
+  helperText: {
+    marginTop: 5,
+    fontSize: 11.5,
     fontWeight: "600",
-    lineHeight: 17,
   },
-  infoText: {
+  forgotLink: {
     marginTop: 10,
-    fontSize: 12.5,
-    fontWeight: "600",
-    lineHeight: 17,
+    alignSelf: "flex-end",
   },
   submitBtn: {
     marginTop: 18,
-    borderRadius: 14,
-    paddingVertical: 13.5,
+    borderRadius: 13,
+    paddingVertical: 13,
     alignItems: "center",
     justifyContent: "center",
   },
   submitBtnText: {
-    color: "#0B0C10",
-    fontSize: 14,
+    fontSize: 14.5,
     fontWeight: "800",
   },
-  textLinkBtn: {
+  backToSignIn: {
     marginTop: 14,
     alignItems: "center",
-    paddingVertical: 6,
   },
   footerBlock: {
     marginTop: 22,
     alignItems: "center",
-    gap: 3,
+    gap: 5,
   },
-  footerMeta: {
-    fontSize: 11.5,
-    fontWeight: "600",
-    textAlign: "center",
-  },
-  footerSub: {
+  footerNote: {
     fontSize: 11,
     textAlign: "center",
+    lineHeight: 16,
+    maxWidth: 320,
+  },
+  footerCredit: {
+    fontSize: 11.5,
+    fontWeight: "700",
   },
 });
