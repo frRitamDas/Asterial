@@ -1,32 +1,76 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   ASTERIAL_BRAND,
   canActorRemoveGroupMember,
+  classifyAuthError,
   computeOutgoingDeliveryState,
+  isValidPublicSupabaseConfig,
   loginSchema,
+  momentCreateSchema,
+  orbitSchema,
   parseAuthDeepLink,
   passwordUpdateSchema,
+  postBodySchema,
   signupSchema,
   validateUploadMetadataAndHeader,
 } from "@asterial/core";
+import { getMobileRuntimeConfig } from "./config/env";
 import { createClientUuid } from "./lib/uuid";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const mobileRoot = path.resolve(__dirname, "..");
+const repoRoot = path.resolve(mobileRoot, "..");
 
-describe("ASTERIAL v1.3.0 React Native mobile suite", () => {
-  it("reports synchronized v1.3.0 brand & Android package metadata", () => {
+describe("ASTERIAL v1.4.0 React Native mobile suite", () => {
+  it("reports synchronized v1.4.0 brand & monotonic Android package metadata", () => {
     assert.equal(ASTERIAL_BRAND.name, "ASTERIAL");
-    assert.equal(ASTERIAL_BRAND.version, "1.3.0");
-    assert.equal(ASTERIAL_BRAND.semver, "1.3.0");
-    assert.equal(ASTERIAL_BRAND.versionCode, 13000);
+    assert.equal(ASTERIAL_BRAND.version, "1.4.0");
+    assert.equal(ASTERIAL_BRAND.semver, "1.4.0");
+    assert.equal(ASTERIAL_BRAND.versionCode, 14000);
+    assert.ok(ASTERIAL_BRAND.versionCode > 13010);
     assert.equal(ASTERIAL_BRAND.androidPackageId, "com.xhuracan.asterial");
     assert.equal(ASTERIAL_BRAND.developer, "Ritam Das");
     assert.equal(ASTERIAL_BRAND.attribution, "By X Huracan");
+  });
+
+  it("prevents placeholder CI env vars from overwriting valid runtimeEnv.generated.ts (Bug #2 regression guard)", () => {
+    const generatedPath = path.join(
+      mobileRoot,
+      "src/config/runtimeEnv.generated.ts"
+    );
+    const beforeContent = fs.readFileSync(generatedPath, "utf8");
+
+    // Simulate the exact v1.3.0 CI failure condition where placeholder env vars were passed
+    execFileSync(
+      process.execPath,
+      [path.join(repoRoot, "scripts/prepare-mobile-env.mjs")],
+      {
+        cwd: repoRoot,
+        env: {
+          ...process.env,
+          NEXT_PUBLIC_SUPABASE_URL: "https://placeholder.supabase.co",
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: "public-anon-placeholder",
+        },
+      }
+    );
+
+    const afterContent = fs.readFileSync(generatedPath, "utf8");
+    assert.equal(afterContent.includes("placeholder.supabase.co"), false);
+    assert.equal(afterContent.includes("public-anon-placeholder"), false);
+    assert.equal(afterContent, beforeContent);
+
+    const cfg = getMobileRuntimeConfig();
+    if (cfg.isSupabaseConfigured) {
+      assert.equal(
+        isValidPublicSupabaseConfig(cfg.supabaseUrl, cfg.supabaseAnonKey),
+        true
+      );
+    }
   });
 
   it("generates collision-free RFC-4122 v4 UUIDs for optimistic message client_id deduplication", () => {
@@ -41,7 +85,7 @@ describe("ASTERIAL v1.3.0 React Native mobile suite", () => {
     }
   });
 
-  it("enforces zero WebView / Capacitor wrapper dependencies in mobile/", () => {
+  it("enforces zero WebView / Capacitor wrapper dependencies in mobile/ and ships native Orbits, Moments & Feed screens", () => {
     const pkg = JSON.parse(
       fs.readFileSync(path.join(mobileRoot, "package.json"), "utf8")
     ) as {
@@ -49,7 +93,7 @@ describe("ASTERIAL v1.3.0 React Native mobile suite", () => {
       dependencies?: Record<string, string>;
       devDependencies?: Record<string, string>;
     };
-    assert.equal(pkg.version, "1.3.0");
+    assert.equal(pkg.version, "1.4.0");
 
     const allDeps = {
       ...(pkg.dependencies || {}),
@@ -60,9 +104,29 @@ describe("ASTERIAL v1.3.0 React Native mobile suite", () => {
       Object.keys(allDeps).some((k) => k.startsWith("@capacitor/")),
       false
     );
+
+    for (const screenFile of [
+      "AuthScreen.tsx",
+      "InboxScreen.tsx",
+      "ConversationScreen.tsx",
+      "OrbitsScreen.tsx",
+      "OrbitRoomScreen.tsx",
+      "MomentsScreen.tsx",
+      "FeedScreen.tsx",
+      "ContactsScreen.tsx",
+      "ProfileScreen.tsx",
+      "SettingsScreen.tsx",
+      "PasswordRecoveryScreen.tsx",
+    ]) {
+      assert.equal(
+        fs.existsSync(path.join(mobileRoot, "src/screens", screenFile)),
+        true,
+        `Missing native screen ${screenFile}`
+      );
+    }
   });
 
-  it("validates native authentication schemas and deep-link callbacks", () => {
+  it("validates native authentication, error diagnostics, Orbits, Moments, and Feed schemas", () => {
     assert.equal(
       loginSchema.safeParse({
         email: "ritam@example.com",
@@ -85,6 +149,37 @@ describe("ASTERIAL v1.3.0 React Native mobile suite", () => {
         confirmPassword: "MismatchPass9",
       }).success,
       false
+    );
+
+    assert.equal(
+      classifyAuthError(new TypeError("Network request failed")).category,
+      "network_unreachable"
+    );
+
+    assert.equal(
+      orbitSchema.safeParse({
+        slug: "asterial-core",
+        name: "Asterial Core",
+        description: "Engineering Orbit",
+        visibility: "public",
+      }).success,
+      true
+    );
+    assert.equal(
+      momentCreateSchema.safeParse({
+        caption: "Android v1.4.0 live",
+        backgroundTone: "graphite",
+        audience: "everyone",
+        durationHours: 12,
+      }).success,
+      true
+    );
+    assert.equal(
+      postBodySchema.safeParse({
+        body: "Monochrome overhaul shipped.",
+        visibility: "public",
+      }).success,
+      true
     );
 
     const recoveryLink = parseAuthDeepLink(

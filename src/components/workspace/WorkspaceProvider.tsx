@@ -28,8 +28,21 @@ interface ReportPayload {
   reportedUserId?: string | null;
   conversationId?: string | null;
   messageId?: string | null;
+  orbitId?: string | null;
+  postId?: string | null;
+  momentId?: string | null;
   category: ReportCategory;
   details: string;
+}
+
+export interface WorkspaceReportTarget {
+  reportedUserId?: string | null;
+  conversationId?: string | null;
+  messageId?: string | null;
+  orbitId?: string | null;
+  postId?: string | null;
+  momentId?: string | null;
+  label: string;
 }
 
 interface WorkspaceContextValue {
@@ -44,19 +57,9 @@ interface WorkspaceContextValue {
   loadingInitial: boolean;
   totalUnreadCount: number;
   activeModal: "new-dm" | "new-group" | "search" | null;
-  reportTarget: {
-    reportedUserId?: string | null;
-    conversationId?: string | null;
-    messageId?: string | null;
-    label: string;
-  } | null;
+  reportTarget: WorkspaceReportTarget | null;
   setActiveModal: (modal: "new-dm" | "new-group" | "search" | null) => void;
-  openReportModal: (target: {
-    reportedUserId?: string | null;
-    conversationId?: string | null;
-    messageId?: string | null;
-    label: string;
-  }) => void;
+  openReportModal: (target: WorkspaceReportTarget) => void;
   closeReportModal: () => void;
   refreshProfile: () => Promise<void>;
   refreshConversations: () => Promise<void>;
@@ -134,12 +137,9 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const [activeModal, setActiveModal] = useState<
     "new-dm" | "new-group" | "search" | null
   >(null);
-  const [reportTarget, setReportTarget] = useState<{
-    reportedUserId?: string | null;
-    conversationId?: string | null;
-    messageId?: string | null;
-    label: string;
-  } | null>(null);
+  const [reportTarget, setReportTarget] = useState<WorkspaceReportTarget | null>(
+    null
+  );
 
   const prefsRef = useRef<NotificationPreferences | null>(null);
   const convsRef = useRef<ConversationSummary[]>([]);
@@ -960,6 +960,9 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         reported_user_id: payload.reportedUserId || null,
         conversation_id: payload.conversationId || null,
         message_id: payload.messageId || null,
+        orbit_id: payload.orbitId || null,
+        post_id: payload.postId || null,
+        moment_id: payload.momentId || null,
         category: payload.category,
         details: payload.details.trim().slice(0, 1000),
       });

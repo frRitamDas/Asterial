@@ -1,9 +1,10 @@
 "use client";
 
-import React, { Suspense, useState } from "react";
+import React, { Suspense, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Lock, Mail } from "lucide-react";
+import { classifyAuthError } from "@asterial/core";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -24,9 +25,11 @@ function LoginForm() {
   }>({});
   const [formError, setFormError] = useState<string | null>(initialError);
   const [loading, setLoading] = useState(false);
+  const inFlightRef = useRef(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (inFlightRef.current) return;
     setFormError(null);
     setFieldErrors({});
 
@@ -43,6 +46,7 @@ function LoginForm() {
       return;
     }
 
+    inFlightRef.current = true;
     setLoading(true);
     try {
       const supabase = getSupabaseBrowserClient();
@@ -52,29 +56,33 @@ function LoginForm() {
       });
 
       if (error) {
-        if (error.message.toLowerCase().includes("invalid login")) {
-          setFormError("Invalid email address or password.");
-        } else {
-          setFormError(error.message);
-        }
+        const classified = classifyAuthError(
+          error,
+          typeof navigator !== "undefined" ? navigator.onLine : true
+        );
+        setFormError(classified.userMessage);
         setLoading(false);
+        inFlightRef.current = false;
         return;
       }
 
       router.replace(nextPath);
       router.refresh();
-    } catch {
-      setFormError(
-        "Unable to connect to ASTERIAL authentication. Check your network and try again."
+    } catch (err) {
+      const classified = classifyAuthError(
+        err,
+        typeof navigator !== "undefined" ? navigator.onLine : true
       );
+      setFormError(classified.userMessage);
       setLoading(false);
+      inFlightRef.current = false;
     }
   };
 
   return (
     <AuthShell
       title="Sign in to ASTERIAL"
-      subtitle="Enter your credentials to resume your conversations."
+      subtitle="Enter your credentials to resume your workspace."
       footer={
         <p className="text-center text-xs text-zinc-400">
           New to ASTERIAL?{" "}
@@ -91,7 +99,7 @@ function LoginForm() {
         {formError && (
           <div
             role="alert"
-            className="rounded-xl border border-red-500/35 bg-red-500/10 px-3.5 py-2.5 text-xs text-red-300"
+            className="rounded-xl border border-red-500/35 bg-red-500/10 px-3.5 py-2.5 text-xs text-red-200"
           >
             {formError}
           </div>

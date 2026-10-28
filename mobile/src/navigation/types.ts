@@ -1,29 +1,23 @@
-/**
- * Phase 2+ React Native navigation route parameter contracts.
- * Defined in Phase 1 so upcoming native messaging & social screens share strict
- * compile-time route signatures.
- */
-export type AuthStackParamList = {
-  SignIn: undefined;
-  SignUp: undefined;
-  ResetPassword: undefined;
-  Onboarding: undefined;
-};
+export type MainTabKey =
+  | "chats"
+  | "groups"
+  | "orbits"
+  | "moments"
+  | "feed"
+  | "contacts"
+  | "profile"
+  | "settings";
 
-export type MainTabParamList = {
-  Feed: undefined;
-  Explore: undefined;
-  Chats: undefined;
-  Notifications: undefined;
-  Profile: { username?: string } | undefined;
-};
+export type MobileBootStatus =
+  | "booting"
+  | "unconfigured"
+  | "signed_out"
+  | "password_recovery"
+  | "onboarding"
+  | "ready";
 
-export type RootStackParamList = {
-  Auth: undefined;
-  MainTabs: undefined;
-  ConversationThread: { conversationId: string };
-  GroupCreate: undefined;
-  PostComposer: { replyToPostId?: string } | undefined;
-  PostDetail: { postId: string };
-  Settings: undefined;
-};
+export interface ToastMessage {
+  id: number;
+  kind: "info" | "success" | "error";
+  text: string;
+}

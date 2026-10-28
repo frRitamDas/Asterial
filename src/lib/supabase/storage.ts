@@ -5,6 +5,8 @@ import { getPublicEnv } from "@/lib/env";
 import { sanitizeStorageFileName } from "@/lib/utils/format";
 import { validateUploadFile } from "@/lib/validation/schemas";
 
+export type PrivateBucketId = "avatars" | "chat-attachments" | "social-media";
+
 interface SignedCacheEntry {
   url: string;
   expiresAt: number;
@@ -14,12 +16,12 @@ const signedUrlCache = new Map<string, SignedCacheEntry>();
 const SIGNED_URL_TTL_SECONDS = 3600;
 const CACHE_BUFFER_MS = 5 * 60 * 1000;
 
-function cacheKey(bucket: string, path: string): string {
+function cacheKey(bucket: PrivateBucketId, path: string): string {
   return `${bucket}:${path}`;
 }
 
 export function getCachedSignedUrl(
-  bucket: "avatars" | "chat-attachments",
+  bucket: PrivateBucketId,
   path: string | null | undefined
 ): string | null {
   if (!path) return null;
@@ -34,7 +36,7 @@ export function getCachedSignedUrl(
 }
 
 export async function resolveSignedUrl(
-  bucket: "avatars" | "chat-attachments",
+  bucket: PrivateBucketId,
   path: string | null | undefined
 ): Promise<string | null> {
   if (!path) return null;
@@ -62,7 +64,8 @@ export async function resolveSignedUrl(
   return data.signedUrl;
 }
 
-export async function primeAvatarSignedUrls(
+export async function primeBucketSignedUrls(
+  bucket: PrivateBucketId,
   paths: Array<string | null | undefined>
 ): Promise<void> {
   const missing = Array.from(
@@ -72,7 +75,7 @@ export async function primeAvatarSignedUrls(
           Boolean(p) &&
           !p!.startsWith("http://") &&
           !p!.startsWith("https://") &&
-          !getCachedSignedUrl("avatars", p)
+          !getCachedSignedUrl(bucket, p)
       )
     )
   );
@@ -81,7 +84,7 @@ export async function primeAvatarSignedUrls(
 
   const supabase = getSupabaseBrowserClient();
   const { data, error } = await supabase.storage
-    .from("avatars")
+    .from(bucket)
     .createSignedUrls(missing, SIGNED_URL_TTL_SECONDS);
 
   if (error || !data) return;
@@ -89,12 +92,18 @@ export async function primeAvatarSignedUrls(
   const expiresAt = Date.now() + SIGNED_URL_TTL_SECONDS * 1000 - CACHE_BUFFER_MS;
   for (const item of data) {
     if (item.path && item.signedUrl) {
-      signedUrlCache.set(cacheKey("avatars", item.path), {
+      signedUrlCache.set(cacheKey(bucket, item.path), {
         url: item.signedUrl,
         expiresAt,
       });
     }
   }
+}
+
+export async function primeAvatarSignedUrls(
+  paths: Array<string | null | undefined>
+): Promise<void> {
+  return primeBucketSignedUrls("avatars", paths);
 }
 
 export async function measureImageDimensions(
@@ -136,7 +145,7 @@ export async function measureImageDimensions(
 }
 
 function uploadViaXhr(params: {
-  bucket: "avatars" | "chat-attachments";
+  bucket: PrivateBucketId;
   storagePath: string;
   file: File;
   mimeType: string;
@@ -241,7 +250,6 @@ export async function uploadAvatarFile(
     upsert: true,
   });
 
-  // Prime cache immediately
   await resolveSignedUrl("avatars", storagePath);
   return storagePath;
 }
@@ -288,6 +296,66 @@ export async function uploadConversationAttachment(params: {
     signal: params.signal,
   });
 
+  return {
+    storagePath,
+    fileName: safeName,
+    mimeType: validation.verifiedMime,
+    byteSize: params.file.size,
+    width: dims.width,
+    height: dims.height,
+  };
+}
+
+export async function uploadSocialMediaFile(params: {
+  domain: "posts" | "moments" | "orbits";
+  userId: string;
+  orbitId?: string;
+  file: File;
+  kind?: "social-image" | "attachment";
+  onProgress?: (percent: number) => void;
+  signal?: AbortSignal;
+}): Promise<{
+  storagePath: string;
+  fileName: string;
+  mimeType: string;
+  byteSize: number;
+  width: number | null;
+  height: number | null;
+}> {
+  const validationKind = params.kind || (params.domain === "orbits" ? "attachment" : "social-image");
+  const validation = await validateUploadFile(params.file, validationKind);
+  if (!validation.ok) {
+    throw new Error(validation.error);
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session?.access_token) {
+    throw new Error("Session expired. Sign in again to upload media.");
+  }
+
+  const safeName = sanitizeStorageFileName(params.file.name);
+  const storagePath =
+    params.domain === "orbits" && params.orbitId
+      ? `orbits/${params.userId}/${params.orbitId}/${crypto.randomUUID()}-${safeName}`
+      : `${params.domain}/${params.userId}/${crypto.randomUUID()}-${safeName}`;
+
+  const dims = await measureImageDimensions(params.file, validation.verifiedMime);
+
+  await uploadViaXhr({
+    bucket: "social-media",
+    storagePath,
+    file: params.file,
+    mimeType: validation.verifiedMime,
+    accessToken: session.access_token,
+    onProgress: params.onProgress,
+    signal: params.signal,
+  });
+
+  await resolveSignedUrl("social-media", storagePath);
   return {
     storagePath,
     fileName: safeName,

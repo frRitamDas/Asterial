@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -13,6 +13,7 @@ import {
   User as UserIcon,
   XCircle,
 } from "lucide-react";
+import { classifyAuthError } from "@asterial/core";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -36,6 +37,7 @@ export default function SignupPage() {
     null
   );
   const [loading, setLoading] = useState(false);
+  const inFlightRef = useRef(false);
 
   const trimmedUsername = username.trim().toLowerCase();
   const isUsernameFormatValid =
@@ -88,6 +90,7 @@ export default function SignupPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (inFlightRef.current) return;
     setFormError(null);
     setFieldErrors({});
 
@@ -113,6 +116,7 @@ export default function SignupPage() {
       return;
     }
 
+    inFlightRef.current = true;
     setLoading(true);
     try {
       const supabase = getSupabaseBrowserClient();
@@ -125,6 +129,7 @@ export default function SignupPage() {
       if (available === false) {
         setFieldErrors({ username: "That username was just claimed. Pick another." });
         setLoading(false);
+        inFlightRef.current = false;
         return;
       }
 
@@ -142,13 +147,18 @@ export default function SignupPage() {
       });
 
       if (error) {
-        setFormError(error.message);
+        setFormError(
+          classifyAuthError(
+            error,
+            typeof navigator !== "undefined" ? navigator.onLine : true
+          ).userMessage
+        );
         setLoading(false);
+        inFlightRef.current = false;
         return;
       }
 
       if (data.session) {
-        // Ensure profile matches exact chosen username & mark onboarding complete
         await supabase.rpc("complete_profile_onboarding", {
           p_username: parsed.data.username,
           p_display_name: parsed.data.displayName,
@@ -160,14 +170,18 @@ export default function SignupPage() {
         return;
       }
 
-      // Email verification required by Supabase project settings
       setVerificationSentTo(parsed.data.email);
       setLoading(false);
-    } catch {
+      inFlightRef.current = false;
+    } catch (err) {
       setFormError(
-        "Network error while creating your account. Please try again."
+        classifyAuthError(
+          err,
+          typeof navigator !== "undefined" ? navigator.onLine : true
+        ).userMessage
       );
       setLoading(false);
+      inFlightRef.current = false;
     }
   };
 

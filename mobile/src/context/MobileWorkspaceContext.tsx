@@ -29,7 +29,10 @@ import {
   clearSignedUrlCache,
   primePrivateSignedUrls,
 } from "../lib/storage";
-import { ensureMobileSupabaseClient } from "../lib/supabase";
+import {
+  clearPersistedAuthSession,
+  ensureMobileSupabaseClient,
+} from "../lib/supabase";
 
 const LOCAL_APPEARANCE_CACHE_KEY = "@asterial/appearance-cache-v1";
 const INBOX_PAGE_STEP = 30;
@@ -98,6 +101,9 @@ export interface MobileWorkspaceContextValue {
     reportedUserId?: string | null;
     reportedMessageId?: string | null;
     conversationId?: string | null;
+    orbitId?: string | null;
+    postId?: string | null;
+    momentId?: string | null;
     reason: ReportReason;
     details: string;
   }) => Promise<void>;
@@ -427,7 +433,7 @@ export function MobileWorkspaceProvider({
     [showToast]
   );
 
-  const bootstrapApp = useCallback(async () => {
+  const bootstrapApp = useCallback(async (forceRemoteRefresh = false) => {
     try {
       const [cachedAppearanceRaw, appInfo, onlineNow] = await Promise.all([
         AsyncStorage.getItem(LOCAL_APPEARANCE_CACHE_KEY).catch(() => null),
@@ -458,7 +464,7 @@ export function MobileWorkspaceProvider({
         }
       }
 
-      const client = await ensureMobileSupabaseClient();
+      const client = await ensureMobileSupabaseClient({ forceRemoteRefresh });
       if (!client) {
         setSupabase(null);
         setBootStatus("unconfigured");
@@ -488,6 +494,7 @@ export function MobileWorkspaceProvider({
           await client.auth.getUser();
         if (verifyErr || !verifiedUser?.user) {
           await client.auth.signOut().catch(() => undefined);
+          await clearPersistedAuthSession();
           clearSignedUrlCache();
           setUser(null);
           setProfile(null);
@@ -920,6 +927,9 @@ export function MobileWorkspaceProvider({
       reportedUserId?: string | null;
       reportedMessageId?: string | null;
       conversationId?: string | null;
+      orbitId?: string | null;
+      postId?: string | null;
+      momentId?: string | null;
       reason: ReportReason;
       details: string;
     }) => {
@@ -931,6 +941,9 @@ export function MobileWorkspaceProvider({
         reported_user_id: params.reportedUserId ?? null,
         message_id: params.reportedMessageId ?? null,
         conversation_id: params.conversationId ?? null,
+        orbit_id: params.orbitId ?? null,
+        post_id: params.postId ?? null,
+        moment_id: params.momentId ?? null,
         category: params.reason,
         details: params.details.trim(),
       });
@@ -997,6 +1010,7 @@ export function MobileWorkspaceProvider({
   const signOut = useCallback(async () => {
     if (!supabase) return;
     await supabase.auth.signOut().catch(() => undefined);
+    await clearPersistedAuthSession();
     clearSignedUrlCache();
     setUser(null);
     setProfile(null);
@@ -1040,6 +1054,7 @@ export function MobileWorkspaceProvider({
     }
 
     await supabase.auth.signOut().catch(() => undefined);
+    await clearPersistedAuthSession();
     clearSignedUrlCache();
     setUser(null);
     setProfile(null);
@@ -1079,7 +1094,7 @@ export function MobileWorkspaceProvider({
       showToast,
       dismissToast,
       exitPasswordRecovery,
-      retryBootstrap: bootstrapApp,
+      retryBootstrap: () => bootstrapApp(true),
       refreshWorkspace,
       loadMoreConversations,
       markConversationRead,

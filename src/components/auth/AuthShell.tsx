@@ -1,8 +1,7 @@
 import React from "react";
 import Link from "next/link";
-import { ShieldCheck, Sparkles, Zap } from "lucide-react";
+import { Globe, MessageSquare, ShieldCheck } from "lucide-react";
 import { AsterialLogo } from "@/components/brand/AsterialLogo";
-import { ConstellationBackdrop } from "@/components/brand/ConstellationBackdrop";
 import { ASTERIAL_BRAND } from "@/lib/constants/brand";
 
 interface AuthShellProps {
@@ -19,10 +18,10 @@ export function AuthShell({
   footer,
 }: AuthShellProps) {
   return (
-    <div className="grid min-h-dvh w-full lg:grid-cols-[1.08fr_1fr] bg-[var(--bg-void)]">
+    <div className="grid min-h-dvh w-full lg:grid-cols-[1.06fr_1fr] bg-[var(--bg-void)]">
       {/* Left Brand Panel (Desktop) */}
       <aside className="relative hidden lg:flex flex-col justify-between border-r border-[var(--border-subtle)] bg-[var(--bg-void)] p-12 overflow-hidden">
-        <ConstellationBackdrop />
+        <div className="asterial-grid-bg pointer-events-none absolute inset-0 opacity-20" />
         <div className="relative z-10">
           <Link href="/" className="inline-block">
             <AsterialLogo showVersion showAttribution size="md" />
@@ -30,49 +29,49 @@ export function AuthShell({
         </div>
 
         <div className="relative z-10 max-w-md space-y-6">
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/[0.03] px-3 py-1 font-mono text-[11px] tracking-wider text-zinc-300 uppercase">
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-[var(--bg-surface)] px-3 py-1 font-mono text-[11px] tracking-wider text-zinc-300 uppercase">
             <span>Release {ASTERIAL_BRAND.version}</span>
             <span className="text-zinc-600">·</span>
-            <span>Constellation Architecture</span>
+            <span>Web &amp; Native Android</span>
           </div>
           <h2 className="text-3xl font-semibold tracking-tight text-white leading-snug">
-            Precision real-time messaging built for signal, not noise.
+            Precision communication, Orbits, Moments, and Feed.
           </h2>
           <p className="text-sm text-zinc-400 leading-relaxed">
-            Direct conversations, role-governed groups, authentic delivery
-            receipts, and private media — engineered in a distraction-free
-            monochrome workspace.
+            Direct and group conversations, role-governed communities,
+            auto-expiring Moments, and a chronological Social Feed — unified in
+            a calm monochrome workspace.
           </p>
 
           <div className="grid gap-3 pt-2">
-            <div className="flex items-start gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3.5">
-              <Zap className="h-4 w-4 text-zinc-200 mt-0.5 shrink-0" />
+            <div className="flex items-start gap-3 rounded-xl border border-white/[0.08] bg-[var(--bg-surface)] p-3.5">
+              <MessageSquare className="h-4 w-4 text-zinc-200 mt-0.5 shrink-0" />
               <div>
                 <p className="text-xs font-medium text-white">
-                  Instant Realtime Sync
+                  Real-Time Messaging &amp; Presence
                 </p>
                 <p className="text-xs text-zinc-500 mt-0.5">
-                  Live messages, presence states, typing signals, and reactions.
+                  1:1 and group chats, replies, reactions, and private media.
                 </p>
               </div>
             </div>
-            <div className="flex items-start gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3.5">
+            <div className="flex items-start gap-3 rounded-xl border border-white/[0.08] bg-[var(--bg-surface)] p-3.5">
+              <Globe className="h-4 w-4 text-zinc-200 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-xs font-medium text-white">
+                  Orbits, Moments &amp; Social Feed
+                </p>
+                <p className="text-xs text-zinc-500 mt-0.5">
+                  Public or private communities, 6h–48h Moments, and
+                  chronological posts.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 rounded-xl border border-white/[0.08] bg-[var(--bg-surface)] p-3.5">
               <ShieldCheck className="h-4 w-4 text-zinc-200 mt-0.5 shrink-0" />
               <div>
                 <p className="text-xs font-medium text-white">
-                  Row-Level Database Security
-                </p>
-                <p className="text-xs text-zinc-500 mt-0.5">
-                  Strict membership verification and private signed attachment
-                  delivery.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3.5">
-              <Sparkles className="h-4 w-4 text-zinc-200 mt-0.5 shrink-0" />
-              <div>
-                <p className="text-xs font-medium text-white">
-                  Original Monochrome Craft
+                  PostgreSQL Row Level Security
                 </p>
                 <p className="text-xs text-zinc-500 mt-0.5">
                   Engineered by {ASTERIAL_BRAND.developer} ·{" "}
@@ -123,7 +122,11 @@ export function AuthShell({
 
           {children}
 
-          {footer && <div className="mt-6 pt-6 border-t border-white/[0.08]">{footer}</div>}
+          {footer && (
+            <div className="mt-6 pt-6 border-t border-white/[0.08]">
+              {footer}
+            </div>
+          )}
         </div>
 
         <footer className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-zinc-600 font-mono lg:justify-center">

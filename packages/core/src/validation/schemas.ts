@@ -87,6 +87,77 @@ export const groupCreateSchema = z.object({
   memberIds: z.array(z.string().uuid()).max(100).default([]),
 });
 
+export const orbitSlugSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(
+    /^[a-z0-9][a-z0-9-]{1,34}[a-z0-9]$/,
+    "Orbit handle must be 3–36 lowercase letters, numbers, or hyphens."
+  );
+
+export const orbitCreateSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(2, "Orbit name must be at least 2 characters.")
+    .max(80, "Orbit name cannot exceed 80 characters."),
+  slug: orbitSlugSchema,
+  description: z
+    .string()
+    .trim()
+    .max(500, "Description cannot exceed 500 characters.")
+    .default(""),
+  visibility: z.enum(["public", "private"]).default("public"),
+});
+
+export const orbitSchema = orbitCreateSchema;
+
+export const orbitChannelCreateSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(2, "Channel name must be at least 2 characters.")
+    .max(50, "Channel name cannot exceed 50 characters."),
+  topic: z
+    .string()
+    .trim()
+    .max(240, "Channel topic cannot exceed 240 characters.")
+    .default(""),
+  isAnnouncement: z.boolean().default(false),
+});
+
+export const momentCreateSchema = z.object({
+  caption: z
+    .string()
+    .trim()
+    .max(500, "Moment caption cannot exceed 500 characters.")
+    .default(""),
+  backgroundTone: z
+    .enum(["obsidian", "graphite", "slate", "ivory"])
+    .default("obsidian"),
+  audience: z.enum(["everyone", "contacts"]).default("everyone"),
+  durationHours: z
+    .union([z.literal(6), z.literal(12), z.literal(24), z.literal(48)])
+    .default(24),
+});
+
+export const postBodySchema = z.object({
+  body: z
+    .string()
+    .trim()
+    .max(2000, "Post cannot exceed 2,000 characters."),
+  visibility: z.enum(["public", "contacts"]).default("public"),
+});
+
+export const postCommentSchema = z.object({
+  body: z
+    .string()
+    .trim()
+    .min(1, "Comment cannot be empty.")
+    .max(1000, "Comment cannot exceed 1,000 characters."),
+});
+
 export const reportCreateSchema = z.object({
   category: z.enum([
     "spam",
@@ -100,17 +171,6 @@ export const reportCreateSchema = z.object({
     .trim()
     .max(1000, "Report details cannot exceed 1,000 characters.")
     .default(""),
-});
-
-/**
- * Shared validation schema for Phase 2+ social posts (Web + Android).
- */
-export const postBodySchema = z.object({
-  body: z
-    .string()
-    .trim()
-    .max(1000, "Post cannot exceed 1,000 characters."),
-  visibility: z.enum(["public", "followers"]).default("public"),
 });
 
 /**
@@ -221,12 +281,14 @@ export function validateUploadMetadataAndHeader(params: {
   byteSize: number;
   declaredMime?: string | null;
   headerBytes: Uint8Array;
-  kind: "avatar" | "attachment";
+  kind: "avatar" | "attachment" | "social-image";
 }): { ok: true; verifiedMime: string } | { ok: false; error: string } {
   const maxBytes =
     params.kind === "avatar" ? MAX_AVATAR_BYTES : MAX_ATTACHMENT_BYTES;
   const allowedMimes: readonly string[] =
-    params.kind === "avatar" ? ALLOWED_AVATAR_MIMES : ALLOWED_ATTACHMENT_MIMES;
+    params.kind === "avatar" || params.kind === "social-image"
+      ? ALLOWED_AVATAR_MIMES
+      : ALLOWED_ATTACHMENT_MIMES;
 
   if (params.byteSize <= 0) {
     return { ok: false, error: "Selected file is empty." };
@@ -241,11 +303,11 @@ export function validateUploadMetadataAndHeader(params: {
     return { ok: false, error: "Executable files are not permitted." };
   }
 
-  if (params.kind === "avatar") {
+  if (params.kind === "avatar" || params.kind === "social-image") {
     if (!detectedBinary || !allowedMimes.includes(detectedBinary)) {
       return {
         ok: false,
-        error: "Avatar must be a valid PNG, JPEG, WebP, or GIF image.",
+        error: "Media must be a valid PNG, JPEG, WebP, or GIF image.",
       };
     }
     return { ok: true, verifiedMime: detectedBinary };

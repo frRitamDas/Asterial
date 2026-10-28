@@ -37,9 +37,32 @@ export interface InstalledAndroidAppInfo {
   isDebugBuild: boolean;
 }
 
+export interface NativeHttpsRequestOptions {
+  url: string;
+  method: string;
+  headersJson: string;
+  body?: string | null;
+  timeoutMs?: number;
+}
+
+export interface NativeHttpsResponsePayload {
+  status: number;
+  ok: boolean;
+  statusText: string;
+  headersJson: string;
+  bodyText: string;
+}
+
 interface RawAsterialNativeModule {
+  getSecureItem(key: string): Promise<string | null>;
+  setSecureItem(key: string, value: string): Promise<boolean>;
+  removeSecureItem(key: string): Promise<boolean>;
+  clearSecureStorage(): Promise<boolean>;
+  nativeHttpsRequest(
+    options: NativeHttpsRequestOptions
+  ): Promise<NativeHttpsResponsePayload>;
   pickMediaOrDocument(options: {
-    kind: "avatar" | "attachment";
+    kind: "avatar" | "attachment" | "social-image";
   }): Promise<PickedNativeDocument | null>;
   uploadUriToSupabaseStorage(
     options: NativeUploadOptions
@@ -58,8 +81,47 @@ function getRawModule(): RawAsterialNativeModule | null {
 }
 
 export const AsterialNative = {
+  hasNativeHttpsBridge(): boolean {
+    const mod = getRawModule();
+    return Boolean(mod && typeof mod.nativeHttpsRequest === "function");
+  },
+
+  async getSecureItem(key: string): Promise<string | null> {
+    const mod = getRawModule();
+    if (!mod || typeof mod.getSecureItem !== "function") return null;
+    return mod.getSecureItem(key);
+  },
+
+  async setSecureItem(key: string, value: string): Promise<boolean> {
+    const mod = getRawModule();
+    if (!mod || typeof mod.setSecureItem !== "function") return false;
+    return mod.setSecureItem(key, value);
+  },
+
+  async removeSecureItem(key: string): Promise<boolean> {
+    const mod = getRawModule();
+    if (!mod || typeof mod.removeSecureItem !== "function") return false;
+    return mod.removeSecureItem(key);
+  },
+
+  async clearSecureStorage(): Promise<boolean> {
+    const mod = getRawModule();
+    if (!mod || typeof mod.clearSecureStorage !== "function") return false;
+    return mod.clearSecureStorage();
+  },
+
+  async nativeHttpsRequest(
+    options: NativeHttpsRequestOptions
+  ): Promise<NativeHttpsResponsePayload> {
+    const mod = getRawModule();
+    if (!mod || typeof mod.nativeHttpsRequest !== "function") {
+      throw new Error("Native HTTPS bridge is unavailable.");
+    }
+    return mod.nativeHttpsRequest(options);
+  },
+
   async pickMediaOrDocument(
-    kind: "avatar" | "attachment"
+    kind: "avatar" | "attachment" | "social-image"
   ): Promise<PickedNativeDocument | null> {
     const mod = getRawModule();
     if (!mod) {

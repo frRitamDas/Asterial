@@ -632,6 +632,9 @@ function ReportModal() {
       reportedUserId: reportTarget.reportedUserId,
       conversationId: reportTarget.conversationId,
       messageId: reportTarget.messageId,
+      orbitId: reportTarget.orbitId,
+      postId: reportTarget.postId,
+      momentId: reportTarget.momentId,
       category: parsed.data.category,
       details: parsed.data.details,
     });
