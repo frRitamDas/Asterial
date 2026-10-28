@@ -190,8 +190,8 @@ def main() -> None:
     write_png(ROOT / "public/icon-maskable-512.png", 512, 512, render_icon(512, with_tile=False, emblem_scale=0.56))
     write_png(ROOT / "public/apple-touch-icon.png", 180, 180, render_icon(180, with_tile=False, emblem_scale=0.70))
 
-    # 2. Android launcher mipmaps
-    res = ROOT / "android/app/src/main/res"
+    # 2. Android launcher mipmaps (React Native mobile/android)
+    res = ROOT / "mobile/android/app/src/main/res"
     densities = {
         "mdpi": (48, 108),
         "hdpi": (72, 162),

@@ -13,7 +13,6 @@ import {
   UserCheck,
 } from "lucide-react";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
-import { useNativePlatform } from "@/components/native/NativeBridge";
 import { useToast } from "@/components/ui/Toast";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
@@ -28,7 +27,6 @@ import type { UserSearchResult } from "@/lib/types/database";
 export default function ContactsPage() {
   const router = useRouter();
   const { pushToast } = useToast();
-  const { shareContent } = useNativePlatform();
   const {
     profile,
     conversations,
@@ -111,16 +109,25 @@ export default function ContactsPage() {
             variant="secondary"
             onClick={async () => {
               const handleNote = profile?.username ? ` (@${profile.username})` : "";
-              const shared = await shareContent({
-                title: `Join me on ${ASTERIAL_BRAND.name}`,
-                text: `Connect with me${handleNote} on ${ASTERIAL_BRAND.name} — real-time messaging on Web & Android.`,
-                url: ASTERIAL_BRAND.productionUrl,
-              });
-              if (shared) {
-                pushToast({
-                  title: "Invite link ready to share",
-                  variant: "success",
-                });
+              const shareText = `Connect with me${handleNote} on ${ASTERIAL_BRAND.name} — real-time messaging on Web & Android.`;
+              try {
+                if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+                  await navigator.share({
+                    title: `Join me on ${ASTERIAL_BRAND.name}`,
+                    text: shareText,
+                    url: ASTERIAL_BRAND.productionUrl,
+                  });
+                  return;
+                }
+                if (typeof navigator !== "undefined" && navigator.clipboard) {
+                  await navigator.clipboard.writeText(`${shareText} ${ASTERIAL_BRAND.productionUrl}`);
+                  pushToast({
+                    title: "Invite link copied to clipboard",
+                    variant: "success",
+                  });
+                }
+              } catch {
+                // User dismissed native share sheet
               }
             }}
           >

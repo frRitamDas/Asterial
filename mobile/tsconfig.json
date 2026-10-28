@@ -1,0 +1,22 @@
+{
+  "extends": "@react-native/typescript-config",
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@asterial/core": ["../packages/core/src/index.ts"],
+      "@asterial/core/*": ["../packages/core/src/*"]
+    }
+  },
+  "include": [
+    "index.js",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "../packages/core/src/**/*.ts",
+    "../version.json"
+  ],
+  "exclude": ["node_modules", "android"]
+}

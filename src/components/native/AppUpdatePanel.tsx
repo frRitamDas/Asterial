@@ -11,7 +11,6 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { useNativePlatform } from "@/components/native/NativeBridge";
 import { ASTERIAL_BRAND } from "@/lib/constants/brand";
 import { buildApkFilename, isUpdateAvailable } from "@/lib/version/semver";
 
@@ -27,29 +26,27 @@ interface RemoteReleasePayload {
 }
 
 export function AppUpdatePanel() {
-  const {
-    isNative,
-    platform,
-    nativeVersion,
-    nativeBuildCode,
-    openExternalUrl,
-  } = useNativePlatform();
-
-  const installedVersion = nativeVersion || ASTERIAL_BRAND.semver;
-  const installedCode = nativeBuildCode || ASTERIAL_BRAND.versionCode;
-  const buildCommit = (process.env.NEXT_PUBLIC_GIT_SHA || "").slice(0, 7) || null;
+  const installedVersion = ASTERIAL_BRAND.semver;
+  const installedCode = ASTERIAL_BRAND.versionCode;
+  const buildCommit =
+    (process.env.NEXT_PUBLIC_GIT_SHA || "").slice(0, 7) || null;
 
   const [checking, setChecking] = useState(false);
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
   const [remote, setRemote] = useState<RemoteReleasePayload | null>(null);
   const [checkError, setCheckError] = useState<string | null>(null);
 
+  const openExternalUrl = useCallback((url: string) => {
+    if (typeof window !== "undefined") {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+  }, []);
+
   const checkUpdates = useCallback(async () => {
     setChecking(true);
     setCheckError(null);
 
     try {
-      // 1. Fetch authoritative release manifest from ASTERIAL server
       const apiRes = await fetch("/api/release", {
         cache: "no-store",
         signal: AbortSignal.timeout(8000),
@@ -74,7 +71,6 @@ export function AppUpdatePanel() {
       let apkDownloadUrl = apiData.releasesUrl;
       let hasPublishedGithubAsset = false;
 
-      // 2. Also inspect official GitHub Releases API for published APK assets if reachable
       try {
         const ghRes = await fetch(
           `https://api.github.com/repos/${ASTERIAL_BRAND.githubRepo}/releases/latest`,
@@ -117,7 +113,7 @@ export function AppUpdatePanel() {
           }
         }
       } catch {
-        // GitHub API rate-limited or unreachable; server /api/release remains authoritative
+        // GitHub API rate-limited or unreachable; /api/release remains authoritative
       }
 
       setRemote({
@@ -130,7 +126,12 @@ export function AppUpdatePanel() {
         apkDownloadUrl,
         hasPublishedGithubAsset,
       });
-      setCheckedAt(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+      setCheckedAt(
+        new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      );
     } catch (err) {
       setCheckError(
         err instanceof Error
@@ -164,14 +165,15 @@ export function AppUpdatePanel() {
                 Android App &amp; Release Updates
               </h3>
               <span className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2 py-0.5 font-mono text-[10px] text-zinc-400">
-                {isNative && platform === "android"
-                  ? "Running Native Android APK"
-                  : "Web Workspace"}
+                Web Workspace
               </span>
             </div>
             <p className="mt-0.5 text-xs text-zinc-400">
-              Package <code className="font-mono">{ASTERIAL_BRAND.androidPackageId}</code> ·
-              Current v{installedVersion} (build {installedCode}
+              Android Package{" "}
+              <code className="font-mono">
+                {ASTERIAL_BRAND.androidPackageId}
+              </code>{" "}
+              · Release v{installedVersion} (code {installedCode}
               {buildCommit ? ` · ${buildCommit}` : ""})
             </p>
           </div>
@@ -184,7 +186,7 @@ export function AppUpdatePanel() {
           onClick={() => void checkUpdates()}
         >
           <RefreshCw className="h-3.5 w-3.5" />
-          Check for updates
+          Check releases
         </Button>
       </div>
 
@@ -206,14 +208,15 @@ export function AppUpdatePanel() {
                 <>
                   <Sparkles className="h-4 w-4 text-amber-400" />
                   <span className="text-xs font-semibold text-white">
-                    Update available: v{remote.version} (build {remote.versionCode})
+                    Newer release published: v{remote.version} (code{" "}
+                    {remote.versionCode})
                   </span>
                 </>
               ) : (
                 <>
                   <CheckCircle2 className="h-4 w-4 text-emerald-400" />
                   <span className="text-xs font-semibold text-white">
-                    You are on the latest release (v{remote.version})
+                    Aligned with latest release (v{remote.version})
                   </span>
                 </>
               )}
@@ -243,18 +246,16 @@ export function AppUpdatePanel() {
               <Button
                 size="sm"
                 variant="primary"
-                onClick={() => void openExternalUrl(remote.apkDownloadUrl)}
+                onClick={() => openExternalUrl(remote.apkDownloadUrl)}
               >
                 <Download className="h-3.5 w-3.5" />
-                {updateAvailable
-                  ? `Download APK (v${remote.version})`
-                  : "Download official APK"}
+                Download official APK (v{remote.version})
               </Button>
             ) : (
               <Button
                 size="sm"
                 variant="secondary"
-                onClick={() => void openExternalUrl(remote.releasesUrl)}
+                onClick={() => openExternalUrl(remote.releasesUrl)}
               >
                 <ExternalLink className="h-3.5 w-3.5" />
                 Open GitHub Releases
@@ -264,7 +265,7 @@ export function AppUpdatePanel() {
               size="sm"
               variant="ghost"
               onClick={() =>
-                void openExternalUrl(
+                openExternalUrl(
                   `${ASTERIAL_BRAND.githubActionsUrl}/workflows/android-release.yml`
                 )
               }
@@ -277,10 +278,11 @@ export function AppUpdatePanel() {
       )}
 
       <p className="text-[11px] text-zinc-500 leading-relaxed">
-        Web interface updates deploy automatically via Vercel. Native Android
-        updates (permissions, icons, or Capacitor bridge changes) are delivered
-        as signed APK packages via official GitHub Releases and require your
-        explicit Android package installer confirmation.
+        The ASTERIAL website deploys automatically via Vercel, while the
+        dedicated React Native Android application (
+        <code className="font-mono">{ASTERIAL_BRAND.androidPackageId}</code>) is
+        compiled natively via GitHub Actions against the shared Supabase
+        backend.
       </p>
     </div>
   );

@@ -11,11 +11,10 @@
   "githubRepo": "frRitamDas/Asterial",
   "releaseDate": "October 2026",
   "releaseNotes": [
-    "Official Capacitor Android application (com.xhuracan.asterial) sharing the live ASTERIAL account & conversation workspace",
-    "Automated GitHub Actions Android APK build, verification, and release artifact pipeline",
-    "In-app version & update checker with semantic version comparison and official GitHub Release verification",
-    "Refined design system introducing the balanced Alabaster light theme alongside Obsidian, OLED Pitch, and Graphite",
-    "Native Android hardware back navigation, deep-link routing, status bar sync, and offline recovery shell",
-    "Safe-area, dynamic keyboard viewport, and touch-target optimizations for compact and large Android displays"
+    "Multi-product Phase 1 architecture separating the Next.js full-stack website and dedicated React Native Android application (com.xhuracan.asterial)",
+    "Shared @asterial/core TypeScript package unifying database contracts, Phase 2+ social models, Zod validation, and theme tokens",
+    "Dedicated React Native 0.83 + Hermes native Android foundation connected directly to Supabase Auth & PostgreSQL RLS (zero WebView)",
+    "Automated GitHub Actions pipeline validating @asterial/core, Next.js Web, and compiling the React Native Android APK",
+    "Full preservation of existing 1:1 & group real-time messaging, private Storage signed URLs, and four-theme visual system"
   ]
 }

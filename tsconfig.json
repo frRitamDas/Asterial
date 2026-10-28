@@ -26,19 +26,25 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@asterial/core": [
+        "./packages/core/src/index.ts"
+      ],
+      "@asterial/core/*": [
+        "./packages/core/src/*"
       ]
     }
   },
   "include": [
     "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "packages/core/src/**/*.ts",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",
-    "android",
-    "mobile-shell"
+    "mobile"
   ]
 }

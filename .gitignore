@@ -1,11 +1,13 @@
 # dependencies
 /node_modules
+**/node_modules
 /.pnp
 .pnp.*
 .yarn/*
 
 # testing
 /coverage
+**/coverage
 
 # next.js
 /.next/
@@ -14,6 +16,7 @@
 # production
 /build
 /dist
+/dist-android
 
 # misc
 .DS_Store
@@ -25,10 +28,11 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (NEVER commit secrets)
+# env files & generated mobile runtime config (NEVER commit secrets)
 .env
 .env.*
 !.env.example
+mobile/src/config/runtimeEnv.generated.ts
 
 # vercel
 .vercel
@@ -37,13 +41,15 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# android gradle caches, local SDK paths & NEVER-commit signing keys/APKs
-android/.gradle/
-android/captures/
-android/local.properties
-android/**/build/
-android/app/release/
-android/app/debug/
+# react-native & android gradle caches, local SDK paths & NEVER-commit signing keys/APKs
+mobile/.bundle/
+mobile/android/.gradle/
+mobile/android/.cxx/
+mobile/android/captures/
+mobile/android/local.properties
+mobile/android/**/build/
+mobile/android/app/release/
+mobile/android/app/debug/
 *.jks
 *.keystore
 keystore.properties

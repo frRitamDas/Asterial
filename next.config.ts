@@ -23,6 +23,7 @@ function resolveBuildCommitSha(): string {
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  transpilePackages: ["@asterial/core"],
   allowedDevOrigins: ["*.e2b.app", "*.vercel.app", "localhost", "127.0.0.1"],
   env: {
     NEXT_PUBLIC_GIT_SHA: resolveBuildCommitSha(),

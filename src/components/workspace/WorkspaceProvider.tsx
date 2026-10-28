@@ -11,8 +11,6 @@ import React, {
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
-import { Capacitor } from "@capacitor/core";
-import { Network } from "@capacitor/network";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { primeAvatarSignedUrls } from "@/lib/supabase/storage";
 import { useToast } from "@/components/ui/Toast";
@@ -464,23 +462,9 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
-
-    const capListenerPromise = Capacitor.isNativePlatform()
-      ? Network.addListener("networkStatusChange", (status) => {
-          if (status.connected) {
-            handleOnline();
-          } else {
-            handleOffline();
-          }
-        })
-      : null;
-
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
-      if (capListenerPromise) {
-        void capListenerPromise.then((h) => h.remove());
-      }
     };
   }, [fetchConversations, userId]);
 
