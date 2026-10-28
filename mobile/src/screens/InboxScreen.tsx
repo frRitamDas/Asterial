@@ -17,7 +17,6 @@ import {
   type ConversationSummary,
   type InboxFilterKind,
 } from "@asterial/core";
-import { BrandLockup } from "../components/AsterialEmblem";
 import {
   CreateGroupModal,
   NewDirectChatModal,
@@ -144,11 +143,14 @@ export function InboxScreen({
           { borderBottomColor: palette.borderSubtle },
         ]}
       >
-        <BrandLockup
-          palette={palette}
-          compact
-          subtitle={mode === "groups" ? "Group Channels" : "Encrypted-in-Transit Workspace"}
-        />
+        <View style={styles.screenHeading}>
+          <Text style={[styles.screenTitle, { color: palette.textPrimary }]}>
+            {mode === "groups" ? "Groups" : "Messages"}
+          </Text>
+          <Text style={[styles.screenSubtitle, { color: palette.textMuted }]}>
+            {mode === "groups" ? "Your group conversations" : "Your conversations"}
+          </Text>
+        </View>
 
         <View style={styles.headerActions}>
           {mode !== "groups" ? (
@@ -632,6 +634,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
+  },
+  screenHeading: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  screenTitle: {
+    fontSize: 19,
+    lineHeight: 24,
+    fontWeight: "800",
+    letterSpacing: -0.35,
+  },
+  screenSubtitle: {
+    fontSize: 11.5,
+    lineHeight: 15,
+    fontWeight: "500",
   },
   headerActions: {
     flexDirection: "row",
