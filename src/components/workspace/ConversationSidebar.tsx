@@ -75,17 +75,17 @@ export function ConversationSidebar({ className }: { className?: string }) {
     <aside
       aria-label="Conversations"
       className={cn(
-        "flex h-full flex-col border-r border-[var(--border-subtle)] bg-[var(--bg-void)]",
+        "flex h-full flex-col border-r border-white/[0.07] bg-[#090a0f]",
         className
       )}
     >
       {/* Sidebar Header */}
-      <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-3">
+      <div className="flex items-center justify-between gap-2 px-5 pb-4 pt-6">
         <div>
-          <h1 className="text-base font-semibold tracking-tight text-white">
+          <h1 className="text-xl font-semibold tracking-[-0.04em] text-white">
             Messages
           </h1>
-          <p className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
+          <p className="mt-1 text-[10px] font-medium tracking-[0.12em] text-zinc-600">
             {ASTERIAL_BRAND.name} Workspace
           </p>
         </div>
@@ -96,7 +96,7 @@ export function ConversationSidebar({ className }: { className?: string }) {
             onClick={() => setActiveModal("new-group")}
             title="New group"
             aria-label="New group"
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-zinc-300 hover:bg-white/[0.08] hover:text-white transition-colors cursor-pointer"
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.025] text-zinc-400 transition hover:border-white/15 hover:bg-white/[0.07] hover:text-white cursor-pointer"
           >
             <Users className="h-4 w-4" />
           </button>
@@ -105,7 +105,7 @@ export function ConversationSidebar({ className }: { className?: string }) {
             onClick={() => setActiveModal("new-dm")}
             title="New direct message"
             aria-label="New direct message"
-            className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-zinc-950 hover:bg-zinc-200 transition-colors cursor-pointer"
+            className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-200 text-[#071018] transition hover:bg-sky-100 cursor-pointer"
           >
             <MessageSquarePlus className="h-4 w-4" />
           </button>
@@ -113,7 +113,7 @@ export function ConversationSidebar({ className }: { className?: string }) {
       </div>
 
       {/* Search Box */}
-      <div className="px-3.5 pb-2.5">
+      <div className="px-4 pb-3">
         <div className="relative flex items-center">
           <Search className="pointer-events-none absolute left-3 h-3.5 w-3.5 text-zinc-500" />
           <input
@@ -122,13 +122,13 @@ export function ConversationSidebar({ className }: { className?: string }) {
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Filter conversations..."
             aria-label="Filter conversations"
-            className="h-9 w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] pl-8.5 pr-3 text-xs text-white placeholder:text-zinc-600 focus:border-[var(--border-active)] focus:outline-none transition-colors"
+            className="h-10 w-full rounded-xl border border-white/[0.08] bg-white/[0.025] pl-9 pr-3 text-xs text-white placeholder:text-zinc-600 transition focus:border-sky-200/30 focus:bg-white/[0.04] focus:outline-none"
           />
         </div>
       </div>
 
       {/* Filter Pills */}
-      <div className="flex items-center gap-1 overflow-x-auto px-3.5 pb-2.5 no-scrollbar">
+      <div className="flex items-center gap-1.5 overflow-x-auto px-4 pb-3 no-scrollbar">
         {(
           [
             ["all", "All"],
@@ -146,9 +146,9 @@ export function ConversationSidebar({ className }: { className?: string }) {
             type="button"
             onClick={() => setFilter(id)}
             className={cn(
-              "shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer",
+              "shrink-0 rounded-full px-3 py-1.5 text-[10px] font-semibold transition-colors cursor-pointer",
               filter === id
-                ? "bg-white text-zinc-950"
+                ? "bg-sky-200 text-[#071018]"
                 : "text-zinc-400 hover:bg-white/[0.05] hover:text-zinc-200"
             )}
           >
@@ -159,7 +159,7 @@ export function ConversationSidebar({ className }: { className?: string }) {
 
       {/* Conversation List */}
       <div
-        className="flex-1 overflow-y-auto px-2 py-1 space-y-0.5"
+        className="flex-1 overflow-y-auto px-2.5 py-1.5 space-y-1"
         onClick={() => {
           if (openMenuId) setOpenMenuId(null);
         }}
@@ -222,10 +222,10 @@ export function ConversationSidebar({ className }: { className?: string }) {
                     paddingBottom: "var(--conv-item-py)",
                   }}
                   className={cn(
-                    "flex items-center gap-3 rounded-xl px-2.5 transition-colors",
+                    "flex items-center gap-3 rounded-2xl px-3 transition duration-200",
                     isActive
-                      ? "bg-white/[0.09] border border-white/15"
-                      : "border border-transparent hover:bg-white/[0.04]"
+                      ? "bg-gradient-to-r from-sky-200/[0.10] to-indigo-200/[0.04] border border-sky-200/15 shadow-[inset_2px_0_0_rgba(158,220,255,.8)]"
+                      : "border border-transparent hover:bg-white/[0.035]"
                   )}
                 >
                   <Avatar
@@ -242,7 +242,7 @@ export function ConversationSidebar({ className }: { className?: string }) {
                       <div className="flex items-center gap-1.5 min-w-0">
                         <span
                           className={cn(
-                            "truncate text-sm",
+                            "truncate text-[13px] tracking-[-0.01em]",
                             unread > 0
                               ? "font-semibold text-white"
                               : "font-medium text-zinc-200"
@@ -274,7 +274,7 @@ export function ConversationSidebar({ className }: { className?: string }) {
                     <div className="mt-0.5 flex items-center justify-between gap-2">
                       <p
                         className={cn(
-                          "truncate text-xs",
+                          "truncate text-[11px] leading-5",
                           unread > 0 ? "text-zinc-300" : "text-zinc-500"
                         )}
                       >
@@ -282,7 +282,7 @@ export function ConversationSidebar({ className }: { className?: string }) {
                           "No messages yet"}
                       </p>
                       {unread > 0 && (
-                        <span className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-white px-1.5 font-mono text-[10px] font-semibold text-zinc-950">
+                        <span className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-sky-200 px-1.5 font-mono text-[9px] font-bold text-[#071018]">
                           {unread > 99 ? "99+" : unread}
                         </span>
                       )}
