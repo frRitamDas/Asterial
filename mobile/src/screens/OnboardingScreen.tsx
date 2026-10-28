@@ -167,15 +167,15 @@ export function OnboardingScreen() {
             },
           ]}
         >
-          <Text style={[styles.eyebrow, { color: palette.accent }]}>
-            COMPLETE YOUR PROFILE
-          </Text>
+          <View style={styles.stepRow}>
+            <Text style={[styles.eyebrow, { color: palette.accent }]}>YOUR PROFILE</Text>
+            <Text style={[styles.stepCount, { color: palette.textMuted }]}>01 / 01</Text>
+          </View>
           <Text style={[styles.heading, { color: palette.textPrimary }]}>
-            Claim your ASTERIAL identity
+            Make it yours.
           </Text>
           <Text style={[styles.sub, { color: palette.textSecondary }]}>
-            Confirm your unique @username and display name before entering your
-            workspace.
+            Add the details your friends will recognise. You can always change them later.
           </Text>
 
           <View style={styles.avatarRow}>
@@ -353,7 +353,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 18,
+    marginBottom: 22,
   },
   signOutBtn: {
     paddingHorizontal: 10,
@@ -361,8 +361,18 @@ const styles = StyleSheet.create({
   },
   card: {
     borderWidth: 1,
-    borderRadius: 24,
-    padding: 20,
+    borderRadius: 30,
+    padding: 23,
+  },
+  stepRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  stepCount: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1.1,
   },
   eyebrow: {
     fontSize: 10.5,
@@ -370,14 +380,16 @@ const styles = StyleSheet.create({
     letterSpacing: 1.8,
   },
   heading: {
-    marginTop: 4,
-    fontSize: 21,
+    marginTop: 10,
+    fontSize: 29,
+    lineHeight: 35,
     fontWeight: "800",
+    letterSpacing: -0.8,
   },
   sub: {
-    marginTop: 4,
-    fontSize: 13,
-    lineHeight: 19,
+    marginTop: 7,
+    fontSize: 13.5,
+    lineHeight: 21,
   },
   avatarRow: {
     marginTop: 16,
@@ -404,9 +416,9 @@ const styles = StyleSheet.create({
   },
   input: {
     borderWidth: 1,
-    borderRadius: 13,
-    paddingHorizontal: 13,
-    paddingVertical: 10,
+    borderRadius: 16,
+    paddingHorizontal: 15,
+    paddingVertical: 13,
     fontSize: 14,
   },
   bioInput: {
@@ -419,9 +431,9 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   primaryBtn: {
-    marginTop: 18,
-    borderRadius: 14,
-    paddingVertical: 13.5,
+    marginTop: 20,
+    borderRadius: 17,
+    paddingVertical: 15,
     alignItems: "center",
   },
   primaryBtnText: {

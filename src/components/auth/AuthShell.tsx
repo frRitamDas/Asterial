@@ -34,14 +34,35 @@ export function AuthShell({
             <span className="text-zinc-600">·</span>
             <span>Web &amp; Native Android</span>
           </div>
-          <h2 className="text-3xl font-semibold tracking-tight text-white leading-snug">
-            Precision communication, Orbits, Moments, and Feed.
+          <h2 className="text-4xl font-semibold tracking-tight text-white leading-[1.08]">
+            Your people. Your conversations. All in one place.
           </h2>
-          <p className="text-sm text-zinc-400 leading-relaxed">
-            Direct and group conversations, role-governed communities,
-            auto-expiring Moments, and a chronological Social Feed — unified in
-            a calm monochrome workspace.
+          <p className="text-sm text-zinc-400 leading-relaxed max-w-sm">
+            A calmer way to stay connected. Pick up a conversation, share a
+            moment, or bring your group together — without the clutter.
           </p>
+
+          <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-[#101014] p-4 shadow-2xl shadow-black/30">
+            <div className="mb-4 flex items-center justify-between border-b border-white/[0.07] pb-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-sm font-bold text-black">A</div>
+                <div>
+                  <p className="text-sm font-semibold text-white">Alex Morgan</p>
+                  <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-zinc-500"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> online now</p>
+                </div>
+              </div>
+              <span className="text-xl text-zinc-400">···</span>
+            </div>
+            <div className="space-y-3">
+              <div className="max-w-[82%] rounded-2xl rounded-bl-md bg-[#222228] px-3.5 py-3 text-xs leading-relaxed text-zinc-200">Hey! Are we still on for this evening?</div>
+              <div className="ml-auto max-w-[78%] rounded-2xl rounded-br-md bg-white px-3.5 py-3 text-xs leading-relaxed text-zinc-900">Absolutely. See you at 6 ✨</div>
+              <div className="max-w-[68%] rounded-2xl rounded-bl-md bg-[#222228] px-3.5 py-3 text-xs leading-relaxed text-zinc-200">Perfect, looking forward to it.</div>
+            </div>
+            <div className="mt-4 flex items-center gap-3 rounded-full border border-white/[0.08] bg-[#18181d] px-4 py-3">
+              <span className="flex-1 text-xs text-zinc-500">Write a message…</span>
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-base text-black">↑</span>
+            </div>
+          </div>
 
           <div className="grid gap-3 pt-2">
             <div className="flex items-start gap-3 rounded-xl border border-white/[0.08] bg-[var(--bg-surface)] p-3.5">
@@ -112,21 +133,27 @@ export function AuthShell({
           </Link>
         </div>
 
-        <div className="mx-auto w-full max-w-md py-10">
-          <div className="mb-7">
-            <h1 className="text-2xl font-semibold tracking-tight text-white">
-              {title}
-            </h1>
-            <p className="mt-1.5 text-sm text-zinc-400">{subtitle}</p>
-          </div>
-
-          {children}
-
-          {footer && (
-            <div className="mt-6 pt-6 border-t border-white/[0.08]">
-              {footer}
+        <div className="animate-asterial-rise mx-auto w-full max-w-md py-10 sm:py-12">
+          <div className="mb-7 rounded-[28px] border border-white/[0.08] bg-[var(--bg-surface)] p-5 shadow-2xl shadow-black/20 sm:p-7">
+            <div className="mb-6 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+              <span className="h-1.5 w-1.5 rounded-full bg-white" />
+              Secure account access
             </div>
-          )}
+            <div className="mb-7">
+              <h1 className="text-2xl font-semibold tracking-tight text-white">
+                {title}
+              </h1>
+              <p className="mt-1.5 text-sm leading-relaxed text-zinc-400">{subtitle}</p>
+            </div>
+
+            {children}
+
+            {footer && (
+              <div className="mt-6 border-t border-white/[0.08] pt-6">
+                {footer}
+              </div>
+            )}
+          </div>
         </div>
 
         <footer className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-zinc-600 font-mono lg:justify-center">
