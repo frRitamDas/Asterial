@@ -432,3 +432,55 @@ a {
   transition-duration: 0.01ms !important;
   scroll-behavior: auto !important;
 }
+
+/* Marketing landing page surfaces */
+.asterial-home {
+  isolation: isolate;
+}
+
+.asterial-hero-glow {
+  background:
+    radial-gradient(ellipse 48% 52% at 78% 36%, rgba(70, 99, 219, 0.14), transparent 72%),
+    radial-gradient(ellipse 40% 36% at 15% 8%, rgba(57, 163, 220, 0.08), transparent 70%),
+    linear-gradient(180deg, #090a0c 0%, #07080a 85%);
+}
+
+.asterial-gradient-text {
+  background: linear-gradient(108deg, #f5f7fa 4%, #b7caff 40%, #92dfff 72%, #c3c3ff 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+.asterial-window {
+  transform: perspective(1200px) rotateY(-2deg) rotateX(1deg);
+  transform-origin: center;
+  transition: transform 500ms var(--ease-asterial), border-color 300ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .asterial-window:hover {
+    transform: perspective(1200px) rotateY(0deg) rotateX(0deg) translateY(-3px);
+    border-color: rgba(180, 210, 255, 0.22);
+  }
+}
+
+.asterial-feature-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(circle at 15% 0%, rgba(125, 190, 255, 0.1), transparent 60%);
+  transition: opacity 300ms ease;
+}
+
+.asterial-feature-card:hover::before {
+  opacity: 1;
+}
+
+@media (max-width: 767px) {
+  .asterial-window {
+    transform: none;
+  }
+}
