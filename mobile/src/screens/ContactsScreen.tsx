@@ -50,6 +50,57 @@ export function ContactsScreen({
     id: string;
     label: string;
   } | null>(null);
+  const [closeOrbitIds, setCloseOrbitIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!supabase || !user) return;
+    let active = true;
+    void supabase
+      .from("close_orbits")
+      .select("contact_id")
+      .eq("owner_id", user.id)
+      .then(({ data }) => {
+        if (!active || !data) return;
+        setCloseOrbitIds(
+          new Set(data.map((r: { contact_id: string }) => r.contact_id))
+        );
+      });
+    return () => {
+      active = false;
+    };
+  }, [supabase, user]);
+
+  const toggleCloseOrbit = async (contactId: string) => {
+    if (!supabase) return;
+    const exists = closeOrbitIds.has(contactId);
+    if (exists) {
+      const { error } = await supabase.rpc("remove_close_orbit_contact", {
+        p_contact_id: contactId,
+      });
+      if (error) {
+        showToast(error.message, "error");
+        return;
+      }
+      setCloseOrbitIds((prev) => {
+        const next = new Set(prev);
+        next.delete(contactId);
+        return next;
+      });
+      showToast("Removed from Close Orbit", "info");
+    } else {
+      const { error } = await supabase.rpc("upsert_close_orbit_contact", {
+        p_contact_id: contactId,
+        p_tier: "inner",
+        p_note: "",
+      });
+      if (error) {
+        showToast(error.message, "error");
+        return;
+      }
+      setCloseOrbitIds((prev) => new Set(prev).add(contactId));
+      showToast("Added to Close Orbit", "success");
+    }
+  };
 
   const recentDirectPeers = useMemo<InspectableUserProfile[]>(() => {
     const map = new Map<string, InspectableUserProfile>();
@@ -224,37 +275,72 @@ export function ContactsScreen({
               </View>
 
               {!blocked ? (
-                <Pressable
-                  onPress={() => {
-                    void startDirectChat(item.id)
-                      .then((convId) => onOpenConversation(convId))
-                      .catch((err) =>
-                        showToast(
-                          err instanceof Error
-                            ? err.message
-                            : "Could not open chat.",
-                          "error"
-                        )
-                      );
-                  }}
-                  style={[
-                    styles.msgBtn,
-                    {
-                      backgroundColor: palette.accentSoft,
-                      borderColor: `${palette.accent}55`,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={{
-                      color: palette.accent,
-                      fontSize: 12,
-                      fontWeight: "800",
-                    }}
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      closeOrbitIds.has(item.id)
+                        ? "Remove from Close Orbit"
+                        : "Add to Close Orbit"
+                    }
+                    onPress={() => void toggleCloseOrbit(item.id)}
+                    style={[
+                      styles.msgBtn,
+                      {
+                        backgroundColor: closeOrbitIds.has(item.id)
+                          ? palette.accentSoft
+                          : palette.bgCanvas,
+                        borderColor: closeOrbitIds.has(item.id)
+                          ? palette.accent
+                          : palette.borderSubtle,
+                        paddingHorizontal: 9,
+                      },
+                    ]}
                   >
-                    Message
-                  </Text>
-                </Pressable>
+                    <Text
+                      style={{
+                        color: closeOrbitIds.has(item.id)
+                          ? palette.accent
+                          : palette.textMuted,
+                        fontSize: 13,
+                        fontWeight: "800",
+                      }}
+                    >
+                      {closeOrbitIds.has(item.id) ? "★" : "☆"}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      void startDirectChat(item.id)
+                        .then((convId) => onOpenConversation(convId))
+                        .catch((err) =>
+                          showToast(
+                            err instanceof Error
+                              ? err.message
+                              : "Could not open chat.",
+                            "error"
+                          )
+                        );
+                    }}
+                    style={[
+                      styles.msgBtn,
+                      {
+                        backgroundColor: palette.accentSoft,
+                        borderColor: `${palette.accent}55`,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={{
+                        color: palette.accent,
+                        fontSize: 12,
+                        fontWeight: "800",
+                      }}
+                    >
+                      Message
+                    </Text>
+                  </Pressable>
+                </View>
               ) : null}
             </Pressable>
           );

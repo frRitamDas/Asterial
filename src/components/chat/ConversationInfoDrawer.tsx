@@ -13,6 +13,7 @@ import {
   Edit3,
   Flag,
   LogOut,
+  Orbit,
   Pin,
   PinOff,
   Shield,
@@ -58,6 +59,9 @@ export function ConversationInfoDrawer({
   const {
     user,
     onlineUserIds,
+    closeOrbitMap,
+    upsertCloseOrbit,
+    removeCloseOrbit,
     togglePin,
     toggleMute,
     toggleArchive,
@@ -424,6 +428,48 @@ export function ConversationInfoDrawer({
               </>
             )}
           </div>
+
+          {/* Private Close Orbit Quick Control (Direct Chats) */}
+          {!isGroup && peer && (
+            <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Orbit className="h-4 w-4 shrink-0 text-[var(--accent-primary)]" />
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-[var(--text-primary)]">
+                      {closeOrbitMap.has(peer.id)
+                        ? `In your ${
+                            closeOrbitMap.get(peer.id)?.tier === "inner"
+                              ? "Inner"
+                              : "Priority"
+                          } Orbit`
+                        : "Close Orbit"}
+                    </p>
+                    <p className="text-[10px] text-[var(--text-muted)]">
+                      Private priority list — visible only to you
+                    </p>
+                  </div>
+                </div>
+                {closeOrbitMap.has(peer.id) ? (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => void removeCloseOrbit(peer.id)}
+                  >
+                    Remove
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="accent"
+                    onClick={() => void upsertCloseOrbit(peer.id, "inner")}
+                  >
+                    Add
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Quick Thread Controls */}
           <div className="grid grid-cols-3 gap-2">

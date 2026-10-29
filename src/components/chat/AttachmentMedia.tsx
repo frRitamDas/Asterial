@@ -1,7 +1,15 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Download, ExternalLink, FileText, Loader2, X } from "lucide-react";
+import {
+  Download,
+  ExternalLink,
+  FileText,
+  Film,
+  Loader2,
+  Mic,
+  X,
+} from "lucide-react";
 import { getCachedSignedUrl, resolveSignedUrl } from "@/lib/supabase/storage";
 import { formatBytes } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/cn";
@@ -16,7 +24,11 @@ export function AttachmentMedia({
   attachment,
   isOwnMessage,
 }: AttachmentMediaProps) {
-  const isImage = attachment.mime_type.startsWith("image/");
+  const mime = attachment.mime_type.toLowerCase();
+  const isImage = mime.startsWith("image/");
+  const isVideo = mime.startsWith("video/");
+  const isAudio = mime.startsWith("audio/");
+
   const cachedUrl = getCachedSignedUrl(
     "chat-attachments",
     attachment.storage_path
@@ -54,7 +66,7 @@ export function AttachmentMedia({
   if (isImage) {
     return (
       <>
-        <div className="mt-1.5 overflow-hidden rounded-xl border border-black/10 dark:border-white/10 bg-black/20 max-w-xs">
+        <div className="mt-1.5 overflow-hidden rounded-xl border border-white/10 bg-black/20 max-w-xs">
           {loading ? (
             <div className="flex h-44 w-60 items-center justify-center text-xs text-zinc-400">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -119,6 +131,7 @@ export function AttachmentMedia({
                 </button>
               </div>
             </div>
+
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={signedUrl}
@@ -132,49 +145,118 @@ export function AttachmentMedia({
     );
   }
 
-  return (
-    <a
-      href={signedUrl || "#"}
-      target="_blank"
-      rel="noopener noreferrer"
-      download={attachment.file_name}
-      onClick={(e) => {
-        if (!signedUrl) e.preventDefault();
-      }}
-      className={cn(
-        "mt-1.5 flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-colors max-w-xs",
-        isOwnMessage
-          ? "border-black/15 bg-black/[0.06] text-zinc-950 hover:bg-black/[0.1]"
-          : "border-white/12 bg-white/[0.04] text-zinc-100 hover:bg-white/[0.08]"
-      )}
-    >
+  if (isVideo) {
+    return (
+      <div className="mt-1.5 overflow-hidden rounded-xl border border-white/12 bg-black max-w-xs">
+        {loading ? (
+          <div className="flex h-44 w-64 items-center justify-center gap-2 text-xs text-zinc-400">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Loading video…</span>
+          </div>
+        ) : signedUrl ? (
+          <div>
+            <video
+              src={signedUrl}
+              controls
+              playsInline
+              preload="metadata"
+              className="max-h-72 w-full bg-black object-contain"
+            />
+            <div className="flex items-center justify-between gap-2 border-t border-white/10 bg-black/50 px-2.5 py-1.5 text-[10px] text-zinc-300">
+              <span className="flex items-center gap-1 truncate">
+                <Film className="h-3 w-3 shrink-0" />
+                <span className="truncate">{attachment.file_name}</span>
+              </span>
+              <span className="shrink-0 font-mono text-zinc-400">
+                {formatBytes(attachment.byte_size)}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div className="flex h-28 w-56 items-center justify-center px-3 text-center text-xs text-zinc-500">
+            Video unavailable
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (isAudio) {
+    const isVoiceNote = attachment.file_name.toLowerCase().includes("voice");
+    return (
       <div
         className={cn(
-          "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border",
+          "mt-1.5 flex w-64 sm:w-72 flex-col gap-2 rounded-xl border px-3 py-2.5",
           isOwnMessage
-            ? "border-black/15 bg-black/[0.06]"
-            : "border-white/12 bg-white/[0.05]"
+            ? "border-white/15 bg-black/20"
+            : "border-[var(--border-subtle)] bg-[var(--bg-elevated)]"
         )}
       >
-        <FileText className="h-4 w-4" />
+        <div className="flex items-center justify-between gap-2 text-[11px]">
+          <span className="inline-flex items-center gap-1.5 font-medium truncate">
+            <Mic className="h-3.5 w-3.5 text-[var(--accent-primary)] shrink-0" />
+            <span className="truncate">
+              {isVoiceNote ? "Voice Note" : attachment.file_name}
+            </span>
+          </span>
+          <span className="shrink-0 font-mono text-[10px] opacity-70">
+            {formatBytes(attachment.byte_size)}
+          </span>
+        </div>
+        {loading ? (
+          <div className="flex h-8 items-center gap-2 text-xs opacity-70">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <span>Loading audio…</span>
+          </div>
+        ) : signedUrl ? (
+          <audio
+            src={signedUrl}
+            controls
+            preload="metadata"
+            className="h-9 w-full"
+          />
+        ) : (
+          <span className="text-[11px] opacity-60">Audio unavailable</span>
+        )}
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-xs font-medium">{attachment.file_name}</p>
-        <p
-          className={cn(
-            "font-mono text-[10px]",
-            isOwnMessage ? "text-zinc-600" : "text-zinc-400"
-          )}
-        >
-          {formatBytes(attachment.byte_size)} ·{" "}
-          {(attachment.mime_type.split("/")[1] || "FILE").toUpperCase()}
-        </p>
-      </div>
-      {loading ? (
-        <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0 opacity-60" />
-      ) : (
-        <Download className="h-3.5 w-3.5 shrink-0 opacity-70" />
+    );
+  }
+
+  return (
+    <div
+      className={cn(
+        "mt-1.5 flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 max-w-xs",
+        isOwnMessage
+          ? "border-white/15 bg-black/20 text-[var(--bubble-out-fg)]"
+          : "border-[var(--border-subtle)] bg-[var(--bg-elevated)] text-[var(--text-primary)]"
       )}
-    </a>
+    >
+      <div className="flex items-center gap-2.5 min-w-0">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.06]">
+          <FileText className="h-4 w-4" />
+        </div>
+        <div className="min-w-0">
+          <p className="truncate text-xs font-medium">{attachment.file_name}</p>
+          <p className="font-mono text-[10px] opacity-70">
+            {formatBytes(attachment.byte_size)}
+          </p>
+        </div>
+      </div>
+
+      {loading ? (
+        <Loader2 className="h-4 w-4 animate-spin opacity-60 shrink-0" />
+      ) : signedUrl ? (
+        <a
+          href={signedUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          download={attachment.file_name}
+          aria-label={`Download ${attachment.file_name}`}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/12 bg-white/[0.06] hover:bg-white/[0.14] transition-colors"
+        >
+          <Download className="h-3.5 w-3.5" />
+        </a>
+      ) : null}
+    </div>
   );
 }

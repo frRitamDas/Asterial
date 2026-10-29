@@ -11,18 +11,23 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   AlertCircle,
+  ArrowDown,
   ArrowLeft,
   Check,
   CheckCheck,
   Clock,
   Copy,
   CornerUpLeft,
+  CornerUpRight,
   Edit2,
   Flag,
   History,
   Info,
   Loader2,
   Lock,
+  Orbit,
+  Pin,
+  PinOff,
   RotateCcw,
   Search,
   SmilePlus,
@@ -31,6 +36,7 @@ import {
 } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { primeAvatarSignedUrls } from "@/lib/supabase/storage";
+import { messagesService } from "@/lib/services";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
@@ -75,6 +81,10 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
     profile,
     conversations,
     onlineUserIds,
+    closeOrbitMap,
+    drafts,
+    setDraft,
+    setForwardingMessage,
     markConversationRead,
     refreshConversations,
     isBlockedByMe,
@@ -127,6 +137,16 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
     Map<string, { name: string; expiresAt: number }>
   >(new Map());
   const [blockedBetweenPeer, setBlockedBetweenPeer] = useState(false);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
+  const [initialUnreadCutoff] = useState<string | null>(() => {
+    const match = conversations.find(
+      (c) => c.conversation.id === conversationId
+    );
+    if (match && match.membership.unread_count > 0) {
+      return match.membership.last_read_at;
+    }
+    return null;
+  });
 
   const summary = useMemo(
     () =>
@@ -1131,6 +1151,33 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
     }
   };
 
+  const handleTogglePinMessage = async (msg: EnrichedMessage) => {
+    try {
+      const result = await messagesService.togglePin(msg.id);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === msg.id
+            ? {
+                ...m,
+                pinned_at: result.pinned_at,
+                pinned_by: result.pinned_by,
+              }
+            : m
+        )
+      );
+      pushToast({
+        title: result.pinned ? "Message pinned" : "Message unpinned",
+        variant: "success",
+      });
+    } catch (err) {
+      pushToast({
+        title: "Could not update message pin",
+        description: err instanceof Error ? err.message : "Permission denied.",
+        variant: "error",
+      });
+    }
+  };
+
   const computeOutgoingState = (msg: EnrichedMessage): OutgoingDeliveryState => {
     if (msg.optimisticState === "sending") return "sending";
     if (msg.optimisticState === "failed") return "failed";
@@ -1142,6 +1189,27 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
     }
     return "delivered";
   };
+
+  const pinnedMessages = useMemo(
+    () =>
+      messages
+        .filter((m) => Boolean(m.pinned_at) && !m.deleted_at)
+        .sort((a, b) => (b.pinned_at || "").localeCompare(a.pinned_at || "")),
+    [messages]
+  );
+  const latestPinned = pinnedMessages[0] ?? null;
+
+  const firstUnreadMessageId = useMemo(() => {
+    if (!initialUnreadCutoff) return null;
+    const cutoffMs = new Date(initialUnreadCutoff).getTime();
+    const target = messages.find(
+      (m) =>
+        m.kind === "user" &&
+        m.sender_id !== user?.id &&
+        new Date(m.created_at).getTime() > cutoffMs
+    );
+    return target?.id ?? null;
+  }, [initialUnreadCutoff, messages, user?.id]);
 
   if (accessDenied) {
     return (
@@ -1168,8 +1236,11 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
   }
 
   const isGroup = summary?.conversation.type === "group";
+  const myRole = summary?.membership.role;
+  const canPinMessages = !isGroup || myRole === "owner" || myRole === "admin";
   const peer = summary?.peerProfile || null;
   const peerOnline = Boolean(peer && onlineUserIds.has(peer.id));
+  const peerInOrbit = Boolean(peer && closeOrbitMap.has(peer.id));
   const peerBlockedByMe = Boolean(peer && isBlockedByMe(peer.id));
   const typingNames = Array.from(typingUsers.values()).map((t) => t.name);
 
@@ -1212,15 +1283,23 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
                   showPresence={!isGroup}
                 />
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-white group-hover:underline underline-offset-4">
-                    {summary.displayTitle}
-                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="truncate text-sm font-semibold text-[var(--text-primary)] group-hover:underline underline-offset-4">
+                      {summary.displayTitle}
+                    </p>
+                    {peerInOrbit && (
+                      <Orbit
+                        className="h-3.5 w-3.5 shrink-0 text-[var(--accent-primary)]"
+                        aria-label="In your Close Orbit"
+                      />
+                    )}
+                  </div>
                   <p
                     className={cn(
                       "truncate text-[11px]",
                       typingNames.length > 0
-                        ? "text-white font-medium"
-                        : "text-zinc-500"
+                        ? "text-[var(--accent-primary)] font-medium"
+                        : "text-[var(--text-muted)]"
                     )}
                   >
                     {headerSubtitle}
@@ -1341,13 +1420,56 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
           </div>
         )}
 
+        {/* Pinned Message Banner */}
+        {latestPinned && (
+          <div className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-2 text-xs">
+            <button
+              type="button"
+              onClick={() => {
+                const el = document.getElementById(`msg-${latestPinned.id}`);
+                el?.scrollIntoView({ behavior: "smooth", block: "center" });
+              }}
+              className="flex min-w-0 flex-1 items-center gap-2.5 text-left cursor-pointer"
+            >
+              <Pin className="h-3.5 w-3.5 shrink-0 text-[var(--accent-primary)]" />
+              <div className="min-w-0">
+                <p className="font-semibold text-[11px] text-[var(--accent-primary)]">
+                  Pinned message
+                  {pinnedMessages.length > 1
+                    ? ` (${pinnedMessages.length})`
+                    : ""}
+                </p>
+                <p className="truncate text-xs text-[var(--text-secondary)]">
+                  {latestPinned.body || "Pinned attachment"}
+                </p>
+              </div>
+            </button>
+            {canPinMessages && (
+              <button
+                type="button"
+                onClick={() => void handleTogglePinMessage(latestPinned)}
+                title="Unpin message"
+                aria-label="Unpin message"
+                className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-white/[0.06] hover:text-[var(--text-primary)] cursor-pointer"
+              >
+                <PinOff className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Paginated Message Timeline */}
         <div
           ref={timelineRef}
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+            setShowScrollBottom(distance > 260);
+          }}
           onClick={() => {
             if (reactionPickerMsgId) setReactionPickerMsgId(null);
           }}
-          className="flex-1 overflow-y-auto px-3 py-5 sm:px-6"
+          className="asterial-chat-canvas relative flex-1 overflow-y-auto px-3 py-5 sm:px-6"
         >
           {loading ? (
             <div className="space-y-4 py-4">
@@ -1450,9 +1572,19 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
                     <React.Fragment key={msg.id}>
                       {showDateDivider && (
                         <div className="my-3 flex items-center justify-center">
-                          <span className="rounded-full border border-white/10 bg-[var(--bg-surface)] px-3 py-0.5 font-mono text-[10px] text-zinc-400">
+                          <span className="rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-0.5 font-mono text-[10px] text-[var(--text-secondary)]">
                             {currentDay}
                           </span>
+                        </div>
+                      )}
+
+                      {firstUnreadMessageId === msg.id && (
+                        <div className="my-3 flex items-center gap-3">
+                          <div className="h-px flex-1 bg-[var(--accent-primary)]/35" />
+                          <span className="rounded-full border border-[var(--border-active)] bg-[var(--accent-signal-subtle)] px-3 py-0.5 font-mono text-[10px] font-semibold text-[var(--accent-primary)]">
+                            Unread messages
+                          </span>
+                          <div className="h-px flex-1 bg-[var(--accent-primary)]/35" />
                         </div>
                       )}
 
@@ -1493,6 +1625,8 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
                             {isOwn && !isDeleted && !isEditing && (
                               <MessageActionsToolbar
                                 isOwn
+                                isPinned={Boolean(msg.pinned_at)}
+                                canPin={canPinMessages}
                                 onReply={() =>
                                   setReplyTo({
                                     id: msg.id,
@@ -1507,6 +1641,8 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
                                     prev === msg.id ? null : msg.id
                                   )
                                 }
+                                onForward={() => setForwardingMessage(msg)}
+                                onPin={() => void handleTogglePinMessage(msg)}
                                 onCopy={() => {
                                   if (msg.body) {
                                     void navigator.clipboard.writeText(msg.body);
@@ -1535,10 +1671,26 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
                                 isDeleted
                                   ? "border border-white/10 bg-transparent italic text-zinc-500"
                                   : isOwn
-                                    ? "rounded-br-sm bg-[var(--bubble-out-bg)] text-[var(--bubble-out-fg)]"
+                                    ? "rounded-br-sm border border-[var(--bubble-out-border)] bg-[var(--bubble-out-bg)] text-[var(--bubble-out-fg)]"
                                     : "rounded-bl-sm border border-[var(--border-subtle)] bg-[var(--bubble-in-bg)] text-[var(--bubble-in-fg)]"
                               )}
                             >
+                              {/* Forwarded Label */}
+                              {!isDeleted &&
+                                (Boolean(msg.forwarded_from_id) ||
+                                  Boolean(msg.metadata?.forwarded)) && (
+                                  <div className="mb-1 flex items-center gap-1 text-[11px] font-medium opacity-75">
+                                    <CornerUpRight className="h-3 w-3 shrink-0" />
+                                    <span>
+                                      Forwarded
+                                      {typeof msg.metadata?.forwarded_author ===
+                                      "string"
+                                        ? ` from ${msg.metadata.forwarded_author}`
+                                        : ""}
+                                    </span>
+                                  </div>
+                                )}
+
                               {/* Reply Quote */}
                               {!isDeleted && msg.replyToMessage && (
                                 <button
@@ -1555,8 +1707,8 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
                                   className={cn(
                                     "mb-1.5 block w-full rounded-lg border-l-2 px-2.5 py-1 text-left text-xs cursor-pointer",
                                     isOwn
-                                      ? "border-zinc-900/50 bg-black/[0.06] text-zinc-800"
-                                      : "border-white/40 bg-white/[0.05] text-zinc-300"
+                                      ? "border-[var(--accent-primary)] bg-black/20 text-[var(--bubble-out-fg)]"
+                                      : "border-[var(--accent-primary)] bg-white/[0.05] text-[var(--text-secondary)]"
                                   )}
                                 >
                                   <span className="block font-semibold text-[11px]">
@@ -1633,6 +1785,8 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
                             {!isOwn && !isDeleted && (
                               <MessageActionsToolbar
                                 isOwn={false}
+                                isPinned={Boolean(msg.pinned_at)}
+                                canPin={canPinMessages}
                                 onReply={() =>
                                   setReplyTo({
                                     id: msg.id,
@@ -1648,6 +1802,8 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
                                     prev === msg.id ? null : msg.id
                                   )
                                 }
+                                onForward={() => setForwardingMessage(msg)}
+                                onPin={() => void handleTogglePinMessage(msg)}
                                 onCopy={() => {
                                   if (msg.body) {
                                     void navigator.clipboard.writeText(msg.body);
@@ -1720,8 +1876,14 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
                             </div>
                           )}
 
-                          {/* Timestamp, Edited Tag, Delivery/Read Receipt, and Optimistic Failure Controls */}
-                          <div className="mt-1 flex items-center gap-1.5 px-1 font-mono text-[10px] text-zinc-500">
+                          {/* Timestamp, Pin, Edited Tag, Delivery/Read Receipt, and Optimistic Failure Controls */}
+                          <div className="mt-1 flex items-center gap-1.5 px-1 font-mono text-[10px] text-[var(--text-muted)]">
+                            {msg.pinned_at && !isDeleted && (
+                              <Pin
+                                className="h-2.5 w-2.5 text-[var(--accent-primary)]"
+                                aria-label="Pinned"
+                              />
+                            )}
                             <span>{formatMessageTimestamp(msg.created_at)}</span>
                             {msg.edited_at && !isDeleted && (
                               <span>· edited</span>
@@ -1812,6 +1974,21 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
               <div ref={bottomAnchorRef} />
             </div>
           )}
+
+          {/* Floating Scroll-to-Latest Button */}
+          {showScrollBottom && (
+            <button
+              type="button"
+              onClick={() =>
+                bottomAnchorRef.current?.scrollIntoView({ behavior: "smooth" })
+              }
+              aria-label="Scroll to latest message"
+              className="sticky bottom-3 left-full float-right z-20 inline-flex items-center gap-1.5 rounded-full border border-[var(--border-strong)] bg-[var(--bg-elevated)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] shadow-xl hover:border-[var(--border-active)] cursor-pointer"
+            >
+              <ArrowDown className="h-3.5 w-3.5 text-[var(--accent-primary)]" />
+              <span>Latest</span>
+            </button>
+          )}
         </div>
 
         {/* Message Composer */}
@@ -1820,6 +1997,8 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
             key={conversationId}
             conversationId={conversationId}
             userId={user.id}
+            initialDraft={drafts[conversationId] || ""}
+            onDraftChange={(val) => setDraft(conversationId, val)}
             disabled={blockedBetweenPeer || peerBlockedByMe}
             disabledReason={
               peerBlockedByMe
@@ -1851,16 +2030,24 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
 
 function MessageActionsToolbar({
   isOwn,
+  isPinned,
+  canPin,
   onReply,
   onReact,
+  onForward,
+  onPin,
   onCopy,
   onEdit,
   onDelete,
   onReport,
 }: {
   isOwn: boolean;
+  isPinned: boolean;
+  canPin: boolean;
   onReply: () => void;
   onReact: () => void;
+  onForward: () => void;
+  onPin: () => void;
   onCopy: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -1869,14 +2056,14 @@ function MessageActionsToolbar({
   return (
     <div
       onClick={(e) => e.stopPropagation()}
-      className="flex items-center gap-0.5 rounded-xl border border-white/10 bg-[var(--bg-elevated)] p-0.5 opacity-0 focus-within:opacity-100 group-hover:opacity-100 transition-opacity shadow-lg"
+      className="flex items-center gap-0.5 rounded-xl border border-[var(--border-strong)] bg-[var(--bg-elevated)] p-0.5 opacity-0 focus-within:opacity-100 group-hover:opacity-100 transition-opacity shadow-lg"
     >
       <button
         type="button"
         onClick={onReact}
         title="React"
         aria-label="Add reaction"
-        className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/[0.08] hover:text-white cursor-pointer"
+        className="rounded-lg p-1.5 text-[var(--text-secondary)] hover:bg-white/[0.08] hover:text-[var(--text-primary)] cursor-pointer"
       >
         <SmilePlus className="h-3.5 w-3.5" />
       </button>
@@ -1885,16 +2072,40 @@ function MessageActionsToolbar({
         onClick={onReply}
         title="Reply"
         aria-label="Reply to message"
-        className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/[0.08] hover:text-white cursor-pointer"
+        className="rounded-lg p-1.5 text-[var(--text-secondary)] hover:bg-white/[0.08] hover:text-[var(--text-primary)] cursor-pointer"
       >
         <CornerUpLeft className="h-3.5 w-3.5" />
       </button>
       <button
         type="button"
+        onClick={onForward}
+        title="Forward"
+        aria-label="Forward message"
+        className="rounded-lg p-1.5 text-[var(--text-secondary)] hover:bg-white/[0.08] hover:text-[var(--text-primary)] cursor-pointer"
+      >
+        <CornerUpRight className="h-3.5 w-3.5" />
+      </button>
+      {canPin && (
+        <button
+          type="button"
+          onClick={onPin}
+          title={isPinned ? "Unpin message" : "Pin message"}
+          aria-label={isPinned ? "Unpin message" : "Pin message"}
+          className="rounded-lg p-1.5 text-[var(--text-secondary)] hover:bg-white/[0.08] hover:text-[var(--text-primary)] cursor-pointer"
+        >
+          {isPinned ? (
+            <PinOff className="h-3.5 w-3.5 text-[var(--accent-primary)]" />
+          ) : (
+            <Pin className="h-3.5 w-3.5" />
+          )}
+        </button>
+      )}
+      <button
+        type="button"
         onClick={onCopy}
         title="Copy text"
         aria-label="Copy message text"
-        className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/[0.08] hover:text-white cursor-pointer"
+        className="rounded-lg p-1.5 text-[var(--text-secondary)] hover:bg-white/[0.08] hover:text-[var(--text-primary)] cursor-pointer"
       >
         <Copy className="h-3.5 w-3.5" />
       </button>
@@ -1905,7 +2116,7 @@ function MessageActionsToolbar({
             onClick={onEdit}
             title="Edit"
             aria-label="Edit message"
-            className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/[0.08] hover:text-white cursor-pointer"
+            className="rounded-lg p-1.5 text-[var(--text-secondary)] hover:bg-white/[0.08] hover:text-[var(--text-primary)] cursor-pointer"
           >
             <Edit2 className="h-3.5 w-3.5" />
           </button>
@@ -1914,7 +2125,7 @@ function MessageActionsToolbar({
             onClick={onDelete}
             title="Delete"
             aria-label="Delete message"
-            className="rounded-lg p-1.5 text-zinc-400 hover:bg-red-500/15 hover:text-red-300 cursor-pointer"
+            className="rounded-lg p-1.5 text-[var(--text-secondary)] hover:bg-red-500/15 hover:text-red-300 cursor-pointer"
           >
             <Trash2 className="h-3.5 w-3.5" />
           </button>
@@ -1925,7 +2136,7 @@ function MessageActionsToolbar({
           onClick={onReport}
           title="Report"
           aria-label="Report message"
-          className="rounded-lg p-1.5 text-zinc-400 hover:bg-red-500/15 hover:text-red-300 cursor-pointer"
+          className="rounded-lg p-1.5 text-[var(--text-secondary)] hover:bg-red-500/15 hover:text-red-300 cursor-pointer"
         >
           <Flag className="h-3.5 w-3.5" />
         </button>

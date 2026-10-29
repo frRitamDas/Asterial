@@ -11,6 +11,7 @@ import {
   CheckCheck,
   MessageSquarePlus,
   MoreHorizontal,
+  Orbit,
   Pin,
   PinOff,
   Search,
@@ -30,6 +31,8 @@ export function ConversationSidebar({ className }: { className?: string }) {
   const {
     conversations,
     onlineUserIds,
+    closeOrbitMap,
+    drafts,
     loadingInitial,
     setActiveModal,
     togglePin,
@@ -75,28 +78,37 @@ export function ConversationSidebar({ className }: { className?: string }) {
     <aside
       aria-label="Conversations"
       className={cn(
-        "flex h-full flex-col border-r border-white/[0.07] bg-[#090a0f]",
+        "flex h-full flex-col border-r border-[var(--border-subtle)] bg-[var(--bg-surface)]",
         className
       )}
     >
       {/* Sidebar Header */}
-      <div className="flex items-center justify-between gap-2 px-5 pb-4 pt-6">
+      <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-3">
         <div>
-          <h1 className="text-xl font-semibold tracking-[-0.04em] text-white">
+          <h1 className="text-base font-semibold tracking-tight text-[var(--text-primary)]">
             Messages
           </h1>
-          <p className="mt-1 text-[10px] font-medium tracking-[0.12em] text-zinc-600">
-            {ASTERIAL_BRAND.name} Workspace
+          <p className="font-mono text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
+            {ASTERIAL_BRAND.name} {ASTERIAL_BRAND.version}
           </p>
         </div>
 
         <div className="flex items-center gap-1">
           <button
             type="button"
+            onClick={() => setActiveModal("search")}
+            title="Unified Search (⌘K)"
+            aria-label="Unified Search"
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+          >
+            <Search className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveModal("new-group")}
             title="New group"
             aria-label="New group"
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.025] text-zinc-400 transition hover:border-white/15 hover:bg-white/[0.07] hover:text-white cursor-pointer"
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
           >
             <Users className="h-4 w-4" />
           </button>
@@ -105,7 +117,7 @@ export function ConversationSidebar({ className }: { className?: string }) {
             onClick={() => setActiveModal("new-dm")}
             title="New direct message"
             aria-label="New direct message"
-            className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-200 text-[#071018] transition hover:bg-sky-100 cursor-pointer"
+            className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent-primary)] text-[var(--accent-primary-fg)] hover:bg-[var(--accent-primary-hover)] transition-colors cursor-pointer"
           >
             <MessageSquarePlus className="h-4 w-4" />
           </button>
@@ -113,22 +125,22 @@ export function ConversationSidebar({ className }: { className?: string }) {
       </div>
 
       {/* Search Box */}
-      <div className="px-4 pb-3">
+      <div className="px-3.5 pb-2.5">
         <div className="relative flex items-center">
-          <Search className="pointer-events-none absolute left-3 h-3.5 w-3.5 text-zinc-500" />
+          <Search className="pointer-events-none absolute left-3 h-3.5 w-3.5 text-[var(--text-muted)]" />
           <input
             type="search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Filter conversations..."
+            placeholder="Filter inbox or press ⌘K…"
             aria-label="Filter conversations"
-            className="h-10 w-full rounded-xl border border-white/[0.08] bg-white/[0.025] pl-9 pr-3 text-xs text-white placeholder:text-zinc-600 transition focus:border-sky-200/30 focus:bg-white/[0.04] focus:outline-none"
+            className="h-9 w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] pl-8.5 pr-3 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--border-active)] focus:outline-none transition-colors"
           />
         </div>
       </div>
 
       {/* Filter Pills */}
-      <div className="flex items-center gap-1.5 overflow-x-auto px-4 pb-3 no-scrollbar">
+      <div className="flex items-center gap-1 overflow-x-auto px-3.5 pb-2.5 no-scrollbar">
         {(
           [
             ["all", "All"],
@@ -146,10 +158,10 @@ export function ConversationSidebar({ className }: { className?: string }) {
             type="button"
             onClick={() => setFilter(id)}
             className={cn(
-              "shrink-0 rounded-full px-3 py-1.5 text-[10px] font-semibold transition-colors cursor-pointer",
+              "shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer",
               filter === id
-                ? "bg-sky-200 text-[#071018]"
-                : "text-zinc-400 hover:bg-white/[0.05] hover:text-zinc-200"
+                ? "bg-[var(--accent-primary)] text-[var(--accent-primary-fg)]"
+                : "text-[var(--text-secondary)] hover:bg-white/[0.05] hover:text-[var(--text-primary)]"
             )}
           >
             {label}
@@ -159,7 +171,7 @@ export function ConversationSidebar({ className }: { className?: string }) {
 
       {/* Conversation List */}
       <div
-        className="flex-1 overflow-y-auto px-2.5 py-1.5 space-y-1"
+        className="flex-1 overflow-y-auto px-2 py-1 space-y-0.5"
         onClick={() => {
           if (openMenuId) setOpenMenuId(null);
         }}
@@ -178,7 +190,7 @@ export function ConversationSidebar({ className }: { className?: string }) {
           </div>
         ) : filteredConversations.length === 0 ? (
           <div className="flex flex-col items-center justify-center px-5 py-14 text-center">
-            <p className="text-xs font-medium text-zinc-300">
+            <p className="text-xs font-medium text-[var(--text-primary)]">
               {searchQuery.trim()
                 ? "No conversations match your filter"
                 : filter === "archived"
@@ -187,21 +199,30 @@ export function ConversationSidebar({ className }: { className?: string }) {
                     ? "You are all caught up"
                     : "No conversations yet"}
             </p>
-            <p className="mt-1 text-xs text-zinc-500 leading-relaxed">
+            <p className="mt-1 text-xs text-[var(--text-muted)] leading-relaxed">
               {searchQuery.trim()
-                ? "Try searching across all messages with ⌘K."
+                ? "Open Unified Search (⌘K) to search across People, Messages, Moments, and Feed."
                 : "Start a direct thread or create a group to begin."}
             </p>
-            {!searchQuery.trim() && filter === "all" && (
+            {searchQuery.trim() ? (
+              <button
+                type="button"
+                onClick={() => setActiveModal("search")}
+                className="mt-4 inline-flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border-strong)] bg-[var(--bg-elevated)] px-3 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-subtle)] transition-colors cursor-pointer"
+              >
+                <Search className="h-3.5 w-3.5" />
+                Search entire workspace
+              </button>
+            ) : filter === "all" ? (
               <button
                 type="button"
                 onClick={() => setActiveModal("new-dm")}
-                className="mt-4 inline-flex h-8 items-center gap-1.5 rounded-lg border border-white/15 bg-white/[0.04] px-3 text-xs text-white hover:bg-white/[0.08] transition-colors cursor-pointer"
+                className="mt-4 inline-flex h-8 items-center gap-1.5 rounded-lg bg-[var(--accent-primary)] px-3 text-xs font-medium text-[var(--accent-primary-fg)] hover:bg-[var(--accent-primary-hover)] transition-colors cursor-pointer"
               >
                 <MessageSquarePlus className="h-3.5 w-3.5" />
                 Start conversation
               </button>
-            )}
+            ) : null}
           </div>
         ) : (
           filteredConversations.map((item) => {
@@ -210,6 +231,10 @@ export function ConversationSidebar({ className }: { className?: string }) {
             const isPeerOnline =
               item.conversation.type === "direct" &&
               Boolean(item.peerProfile && onlineUserIds.has(item.peerProfile.id));
+            const inCloseOrbit =
+              item.conversation.type === "direct" &&
+              Boolean(item.peerProfile && closeOrbitMap.has(item.peerProfile.id));
+            const draftText = drafts[item.conversation.id]?.trim();
             const unread = item.membership.unread_count;
             const menuOpen = openMenuId === item.conversation.id;
 
@@ -222,10 +247,10 @@ export function ConversationSidebar({ className }: { className?: string }) {
                     paddingBottom: "var(--conv-item-py)",
                   }}
                   className={cn(
-                    "flex items-center gap-3 rounded-2xl px-3 transition duration-200",
+                    "flex items-center gap-3 rounded-xl px-2.5 transition-colors",
                     isActive
-                      ? "bg-gradient-to-r from-sky-200/[0.10] to-indigo-200/[0.04] border border-sky-200/15 shadow-[inset_2px_0_0_rgba(158,220,255,.8)]"
-                      : "border border-transparent hover:bg-white/[0.035]"
+                      ? "bg-[var(--accent-signal-subtle)] border border-[var(--border-active)]"
+                      : "border border-transparent hover:bg-white/[0.04]"
                   )}
                 >
                   <Avatar
@@ -242,28 +267,34 @@ export function ConversationSidebar({ className }: { className?: string }) {
                       <div className="flex items-center gap-1.5 min-w-0">
                         <span
                           className={cn(
-                            "truncate text-[13px] tracking-[-0.01em]",
+                            "truncate text-sm",
                             unread > 0
-                              ? "font-semibold text-white"
-                              : "font-medium text-zinc-200"
+                              ? "font-semibold text-[var(--text-primary)]"
+                              : "font-medium text-[var(--text-primary)]/90"
                           )}
                         >
                           {item.displayTitle}
                         </span>
+                        {inCloseOrbit && (
+                          <Orbit
+                            className="h-3 w-3 shrink-0 text-[var(--accent-primary)]"
+                            aria-label="In your Close Orbit"
+                          />
+                        )}
                         {item.membership.pinned && (
                           <Pin
-                            className="h-3 w-3 shrink-0 text-zinc-400"
+                            className="h-3 w-3 shrink-0 text-[var(--text-secondary)]"
                             aria-label="Pinned"
                           />
                         )}
                         {item.membership.is_muted && (
                           <BellOff
-                            className="h-3 w-3 shrink-0 text-zinc-500"
+                            className="h-3 w-3 shrink-0 text-[var(--text-muted)]"
                             aria-label="Muted"
                           />
                         )}
                       </div>
-                      <span className="shrink-0 font-mono text-[10px] text-zinc-500 group-hover:opacity-0 transition-opacity">
+                      <span className="shrink-0 font-mono text-[10px] text-[var(--text-muted)] group-hover:opacity-0 transition-opacity">
                         {formatShortTime(
                           item.conversation.last_message_at ||
                             item.conversation.created_at
@@ -272,17 +303,30 @@ export function ConversationSidebar({ className }: { className?: string }) {
                     </div>
 
                     <div className="mt-0.5 flex items-center justify-between gap-2">
-                      <p
-                        className={cn(
-                          "truncate text-[11px] leading-5",
-                          unread > 0 ? "text-zinc-300" : "text-zinc-500"
-                        )}
-                      >
-                        {item.conversation.last_message_preview ||
-                          "No messages yet"}
-                      </p>
+                      {draftText ? (
+                        <p className="truncate text-xs">
+                          <span className="font-medium text-[var(--accent-primary)]">
+                            Draft:{" "}
+                          </span>
+                          <span className="text-[var(--text-secondary)]">
+                            {draftText}
+                          </span>
+                        </p>
+                      ) : (
+                        <p
+                          className={cn(
+                            "truncate text-xs",
+                            unread > 0
+                              ? "text-[var(--text-primary)]/85 font-medium"
+                              : "text-[var(--text-muted)]"
+                          )}
+                        >
+                          {item.conversation.last_message_preview ||
+                            "No messages yet"}
+                        </p>
+                      )}
                       {unread > 0 && (
-                        <span className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-sky-200 px-1.5 font-mono text-[9px] font-bold text-[#071018]">
+                        <span className="inline-flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-full bg-[var(--accent-primary)] px-1.5 font-mono text-[10px] font-semibold text-[var(--accent-primary-fg)]">
                           {unread > 99 ? "99+" : unread}
                         </span>
                       )}
@@ -304,7 +348,7 @@ export function ConversationSidebar({ className }: { className?: string }) {
                     );
                   }}
                   className={cn(
-                    "absolute right-2 top-2.5 rounded-lg border border-white/10 bg-[var(--bg-elevated)] p-1 text-zinc-400 hover:text-white transition-opacity cursor-pointer",
+                    "absolute right-2 top-2.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-opacity cursor-pointer",
                     menuOpen
                       ? "opacity-100"
                       : "opacity-0 focus:opacity-100 group-hover:opacity-100"
@@ -328,7 +372,7 @@ export function ConversationSidebar({ className }: { className?: string }) {
                           !item.membership.pinned
                         );
                       }}
-                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-zinc-200 hover:bg-white/[0.06] cursor-pointer"
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] hover:bg-white/[0.06] cursor-pointer"
                     >
                       {item.membership.pinned ? (
                         <>
@@ -352,7 +396,7 @@ export function ConversationSidebar({ className }: { className?: string }) {
                           !item.membership.is_muted
                         );
                       }}
-                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-zinc-200 hover:bg-white/[0.06] cursor-pointer"
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] hover:bg-white/[0.06] cursor-pointer"
                     >
                       {item.membership.is_muted ? (
                         <>
@@ -374,7 +418,7 @@ export function ConversationSidebar({ className }: { className?: string }) {
                           setOpenMenuId(null);
                           void markConversationRead(item.conversation.id);
                         }}
-                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-zinc-200 hover:bg-white/[0.06] cursor-pointer"
+                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] hover:bg-white/[0.06] cursor-pointer"
                       >
                         <CheckCheck className="h-3.5 w-3.5" />
                         Mark as read
@@ -390,7 +434,7 @@ export function ConversationSidebar({ className }: { className?: string }) {
                           !item.membership.archived
                         );
                       }}
-                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-zinc-200 hover:bg-white/[0.06] cursor-pointer"
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] hover:bg-white/[0.06] cursor-pointer"
                     >
                       {item.membership.archived ? (
                         <>

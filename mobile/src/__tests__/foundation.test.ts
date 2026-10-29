@@ -4,12 +4,13 @@ import { getMobileRuntimeConfig } from "../config/env";
 import { ASTERIAL_BRAND, THEME_PALETTES, RADII, SPACING } from "../theme/tokens";
 import { loginSchema } from "@asterial/core";
 
-describe("ASTERIAL React Native mobile foundation (v1.4.3)", () => {
-  it("shares @asterial/core v1.4.3 monochrome tokens, brand identity, and validation schemas", () => {
+describe("ASTERIAL React Native mobile foundation (v1.4.5)", () => {
+  it("shares @asterial/core v1.4.5 obsidian tokens, brand identity, and validation schemas", () => {
     assert.equal(ASTERIAL_BRAND.name, "ASTERIAL");
-    assert.equal(ASTERIAL_BRAND.version, "1.4.3");
+    assert.equal(ASTERIAL_BRAND.version, "1.4.5");
     assert.equal(ASTERIAL_BRAND.androidPackageId, "com.xhuracan.asterial");
     assert.equal(THEME_PALETTES.obsidian.bgVoid, "#050506");
+    assert.equal(THEME_PALETTES.obsidian.bgCanvas, "#090A0C");
     assert.equal(THEME_PALETTES.pitch.bgVoid, "#000000");
     assert.equal(THEME_PALETTES.alabaster.isDark, false);
     assert.ok(SPACING.lg > 0);

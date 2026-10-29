@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import {
   orbitCreateSchema,
+  type CloseOrbitContactItem,
   type OrbitMemberRow,
   type OrbitRow,
   type OrbitVisibility,
@@ -38,18 +39,24 @@ function slugifyOrbit(raw: string): string {
 
 export function OrbitsScreen({
   onOpenOrbit,
+  onOpenConversation,
 }: {
   onOpenOrbit: (orbitId: string) => void;
+  onOpenConversation?: (conversationId: string) => void;
 }) {
-  const { supabase, user, palette, showToast } = useMobileWorkspace();
+  const { supabase, user, palette, onlineUserIds, startDirectChat, showToast } =
+    useMobileWorkspace();
 
+  const [closeOrbitItems, setCloseOrbitItems] = useState<
+    CloseOrbitContactItem[]
+  >([]);
   const [orbits, setOrbits] = useState<OrbitRow[]>([]);
   const [memberships, setMemberships] = useState<Record<string, OrbitMemberRow>>(
     {}
   );
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [tab, setTab] = useState<"joined" | "discover">("joined");
+  const [tab, setTab] = useState<"close" | "joined" | "discover">("close");
   const [query, setQuery] = useState("");
   const [joiningId, setJoiningId] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
@@ -68,7 +75,8 @@ export function OrbitsScreen({
   const loadOrbits = useCallback(async () => {
     if (!supabase || !user) return;
     setErrorText(null);
-    const [orbitsRes, memRes] = await Promise.all([
+    const [closeRes, orbitsRes, memRes] = await Promise.all([
+      supabase.rpc("get_my_close_orbit"),
       supabase
         .from("orbits")
         .select("*")
@@ -90,17 +98,18 @@ export function OrbitsScreen({
       return;
     }
 
+    const closeRows = (closeRes.data || []) as CloseOrbitContactItem[];
     const rows = (orbitsRes.data || []) as OrbitRow[];
     const map: Record<string, OrbitMemberRow> = {};
     for (const m of (memRes.data || []) as OrbitMemberRow[]) {
       map[m.orbit_id] = m;
     }
 
-    await primePrivateSignedUrls(
-      supabase,
-      "avatars",
-      rows.map((r) => r.icon_url)
-    );
+    await primePrivateSignedUrls(supabase, "avatars", [
+      ...rows.map((r) => r.icon_url),
+      ...closeRows.map((c) => c.avatar_url),
+    ]);
+    setCloseOrbitItems(closeRows);
     setOrbits(rows);
     setMemberships(map);
     setLoading(false);
@@ -262,6 +271,24 @@ export function OrbitsScreen({
           ]}
         >
           <Pressable
+            onPress={() => setTab("close")}
+            style={[
+              styles.tabItem,
+              tab === "close" && { backgroundColor: palette.accentBg },
+            ]}
+          >
+            <Text
+              style={{
+                fontSize: 11.5,
+                fontWeight: "700",
+                color:
+                  tab === "close" ? palette.accentFg : palette.textSecondary,
+              }}
+            >
+              Close ({closeOrbitItems.length})
+            </Text>
+          </Pressable>
+          <Pressable
             onPress={() => setTab("joined")}
             style={[
               styles.tabItem,
@@ -270,13 +297,13 @@ export function OrbitsScreen({
           >
             <Text
               style={{
-                fontSize: 12,
+                fontSize: 11.5,
                 fontWeight: "700",
                 color:
                   tab === "joined" ? palette.accentFg : palette.textSecondary,
               }}
             >
-              My Orbits ({joinedOrbits.length})
+              Spaces ({joinedOrbits.length})
             </Text>
           </Pressable>
           <Pressable
@@ -288,7 +315,7 @@ export function OrbitsScreen({
           >
             <Text
               style={{
-                fontSize: 12,
+                fontSize: 11.5,
                 fontWeight: "700",
                 color:
                   tab === "discover"
@@ -342,6 +369,123 @@ export function OrbitsScreen({
         <View style={styles.centerBox}>
           <ActivityIndicator color={palette.accent} />
         </View>
+      ) : tab === "close" ? (
+        <FlatList
+          data={closeOrbitItems.filter((c) => {
+            const q = query.trim().toLowerCase();
+            if (!q) return true;
+            return (
+              c.display_name.toLowerCase().includes(q) ||
+              c.username.toLowerCase().includes(q) ||
+              c.note.toLowerCase().includes(q)
+            );
+          })}
+          keyExtractor={(item) => item.contact_id}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                void loadOrbits();
+              }}
+              tintColor={palette.accent}
+            />
+          }
+          ListEmptyComponent={
+            <View
+              style={[
+                styles.emptyCard,
+                {
+                  backgroundColor: palette.bgSurface,
+                  borderColor: palette.borderSubtle,
+                },
+              ]}
+            >
+              <Text style={[styles.emptyTitle, { color: palette.textPrimary }]}>
+                Your Close Orbit is empty
+              </Text>
+              <Text style={[styles.emptySub, { color: palette.textSecondary }]}>
+                Private priority connections with owner-only RLS. Add trusted
+                contacts from People or Web Orbits for Quick Chat and Orbit-only
+                Moments &amp; Feed posts.
+              </Text>
+            </View>
+          }
+          renderItem={({ item }) => (
+            <View
+              style={[
+                styles.orbitCard,
+                {
+                  backgroundColor: palette.bgSurface,
+                  borderColor: palette.borderSubtle,
+                },
+              ]}
+            >
+              <View style={styles.cardTopRow}>
+                <NativeAvatar
+                  supabase={supabase}
+                  storagePath={item.avatar_url}
+                  label={item.display_name}
+                  palette={palette}
+                  size={44}
+                  isOnline={onlineUserIds.has(item.contact_id)}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      color: palette.textPrimary,
+                      fontWeight: "700",
+                      fontSize: 14,
+                    }}
+                  >
+                    {item.display_name}
+                  </Text>
+                  <Text style={{ color: palette.textMuted, fontSize: 11.5 }}>
+                    @{item.username} ·{" "}
+                    {item.tier === "inner" ? "Inner Circle" : "Priority"}
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={async () => {
+                    try {
+                      const cid = await startDirectChat(item.contact_id);
+                      onOpenConversation?.(cid);
+                    } catch (err) {
+                      showToast(
+                        err instanceof Error
+                          ? err.message
+                          : "Could not open chat.",
+                        "error"
+                      );
+                    }
+                  }}
+                  style={[
+                    styles.primaryBtn,
+                    { backgroundColor: palette.accentBg },
+                  ]}
+                >
+                  <Text
+                    style={[styles.primaryBtnText, { color: palette.accentFg }]}
+                  >
+                    Chat
+                  </Text>
+                </Pressable>
+              </View>
+              {item.note ? (
+                <Text
+                  style={{
+                    color: palette.textSecondary,
+                    fontSize: 12,
+                    marginTop: 6,
+                  }}
+                >
+                  {item.note}
+                </Text>
+              ) : null}
+            </View>
+          )}
+        />
       ) : (
         <FlatList
           data={visibleOrbits}

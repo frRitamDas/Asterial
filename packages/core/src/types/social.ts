@@ -1,7 +1,35 @@
 /**
- * ASTERIAL v1.4.0 Shared Social, Community (Orbits) & Temporary Updates (Moments) Contracts
+ * ASTERIAL v1.4.5 Shared Social, Close-Connections Orbits, Community Spaces & Temporary Updates Contracts
  * Shared across Next.js Web and Dedicated React Native Android.
  */
+
+export type CloseOrbitTier = "inner" | "priority";
+
+export interface CloseOrbitRow {
+  owner_id: string;
+  contact_id: string;
+  tier: CloseOrbitTier;
+  note: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CloseOrbitContactItem {
+  contact_id: string;
+  username: string;
+  display_name: string;
+  avatar_url: string | null;
+  bio: string;
+  status_text: string;
+  tier: CloseOrbitTier;
+  note: string;
+  last_seen_at: string | null;
+  direct_conversation_id: string | null;
+  last_interaction_at: string | null;
+  last_message_preview: string | null;
+  unread_count: number;
+  created_at: string;
+}
 
 export type OrbitVisibility = "public" | "private";
 export type OrbitRole = "owner" | "admin" | "member";
@@ -65,7 +93,7 @@ export interface OrbitMessageRow {
 }
 
 export type MomentTone = "obsidian" | "graphite" | "slate" | "ivory";
-export type MomentAudience = "everyone" | "contacts";
+export type MomentAudience = "everyone" | "contacts" | "orbit";
 export type MomentDurationHours = 6 | 12 | 24 | 48;
 
 export interface MomentRow {
@@ -105,8 +133,23 @@ export interface ActiveMomentItem {
   expires_at: string;
 }
 
-export type PostVisibility = "public" | "contacts";
-export type FeedScope = "all" | "contacts";
+export interface MomentSearchResult {
+  id: string;
+  author_id: string;
+  author_username: string;
+  author_display_name: string;
+  author_avatar_url: string | null;
+  caption: string;
+  background_tone: MomentTone;
+  media_path: string | null;
+  media_mime: string | null;
+  audience: MomentAudience;
+  created_at: string;
+  expires_at: string;
+}
+
+export type PostVisibility = "public" | "contacts" | "orbit";
+export type FeedScope = "all" | "contacts" | "orbit";
 
 export interface PostRow {
   id: string;
@@ -149,10 +192,26 @@ export interface FeedPostItem {
   updated_at: string;
 }
 
+export interface FeedPostSearchResult {
+  id: string;
+  author_id: string;
+  author_username: string;
+  author_display_name: string;
+  author_avatar_url: string | null;
+  body: string;
+  visibility: PostVisibility;
+  media_path: string | null;
+  media_mime: string | null;
+  like_count: number;
+  comment_count: number;
+  created_at: string;
+}
+
 export interface PostCommentRow {
   id: string;
   post_id: string;
   author_id: string;
+  parent_comment_id?: string | null;
   body: string;
   edited_at: string | null;
   deleted_at: string | null;

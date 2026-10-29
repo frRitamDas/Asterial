@@ -15,8 +15,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea } from "@/components/ui/Input";
 import { useToast } from "@/components/ui/Toast";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { uploadAvatarFile } from "@/lib/supabase/storage";
+import { authService, mediaService, settingsService } from "@/lib/services";
 import { profileUpdateSchema, usernameSchema } from "@/lib/validation/schemas";
 
 export default function ProfilePage() {
@@ -48,12 +47,16 @@ export default function ProfilePage() {
     if (!profile || isSameUsername || !isUsernameValid) return;
     let active = true;
     const timer = window.setTimeout(async () => {
-      const supabase = getSupabaseBrowserClient();
-      const { data } = await supabase.rpc("check_username_available", {
-        p_username: cleanUsername,
-      });
-      if (active) {
-        setCheckedHandle({ handle: cleanUsername, available: Boolean(data) });
+      try {
+        const available = await authService.checkUsernameAvailable(
+          cleanUsername,
+          profile.username
+        );
+        if (active) {
+          setCheckedHandle({ handle: cleanUsername, available });
+        }
+      } catch {
+        // Ignore transient network errors while typing
       }
     }, 280);
     return () => {
@@ -80,13 +83,12 @@ export default function ProfilePage() {
 
     setUploadingAvatar(true);
     try {
-      const storagePath = await uploadAvatarFile(user.id, file, "avatar");
-      const supabase = getSupabaseBrowserClient();
-      const { error } = await supabase
-        .from("profiles")
-        .update({ avatar_url: storagePath })
-        .eq("id", user.id);
-      if (error) throw new Error(error.message);
+      const storagePath = await mediaService.uploadAvatarFile(
+        user.id,
+        file,
+        "avatar"
+      );
+      await settingsService.updateProfile(user.id, { avatar_url: storagePath });
       await refreshProfile();
       pushToast({ title: "Avatar updated", variant: "success" });
     } catch (err) {
@@ -102,14 +104,16 @@ export default function ProfilePage() {
 
   const handleRemoveAvatar = async () => {
     if (!user) return;
-    const supabase = getSupabaseBrowserClient();
-    const { error } = await supabase
-      .from("profiles")
-      .update({ avatar_url: null })
-      .eq("id", user.id);
-    if (!error) {
+    try {
+      await settingsService.updateProfile(user.id, { avatar_url: null });
       await refreshProfile();
       pushToast({ title: "Avatar removed", variant: "success" });
+    } catch (err) {
+      pushToast({
+        title: "Could not remove avatar",
+        description: err instanceof Error ? err.message : "Try again.",
+        variant: "error",
+      });
     }
   };
 
@@ -140,24 +144,21 @@ export default function ProfilePage() {
 
     setSaving(true);
     try {
-      const supabase = getSupabaseBrowserClient();
-      const { error } = await supabase.rpc("complete_profile_onboarding", {
-        p_username: parsed.data.username,
-        p_display_name: parsed.data.displayName,
-        p_bio: parsed.data.bio,
-        p_status_text: parsed.data.statusText,
+      if (!user) return;
+      await settingsService.updateProfile(user.id, {
+        username: parsed.data.username,
+        display_name: parsed.data.displayName,
+        bio: parsed.data.bio,
+        status_text: parsed.data.statusText,
       });
-
-      if (error) {
-        pushToast({
-          title: "Could not save profile",
-          description: error.message,
-          variant: "error",
-        });
-      } else {
-        await refreshProfile();
-        pushToast({ title: "Profile saved", variant: "success" });
-      }
+      await refreshProfile();
+      pushToast({ title: "Profile saved", variant: "success" });
+    } catch (err) {
+      pushToast({
+        title: "Could not save profile",
+        description: err instanceof Error ? err.message : "Try again.",
+        variant: "error",
+      });
     } finally {
       setSaving(false);
     }

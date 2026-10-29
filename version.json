@@ -1,8 +1,8 @@
 {
   "name": "ASTERIAL",
-  "version": "1.4.3",
-  "displayVersion": "1.4.3",
-  "versionCode": 14300,
+  "version": "1.4.5",
+  "displayVersion": "1.4.5",
+  "versionCode": 14500,
   "channel": "stable",
   "developer": "Ritam Das",
   "attribution": "By X Huracan",
@@ -11,9 +11,9 @@
   "githubRepo": "frRitamDas/Asterial",
   "releaseDate": "October 2026",
   "releaseNotes": [
-    "Full public website redesign with a modern product landing page, new visual system, responsive layout, and refined motion.",
-    "Rebuilt the web workspace navigation with a full labeled sidebar, improved active states, clearer grouping, and responsive mobile navigation.",
-    "Redesigned conversation list styling, search and filters, plus the sign-in and sign-up experience.",
-    "Preserved existing Supabase authentication, messaging, groups, Orbits, Moments, Feed, profiles, settings, and backend access controls."
+    "Complete v1.4.5 full-stack messaging & social reconstruction: deep-charcoal workspace (#090A0C / #101216 / #171A20), selective accent themes (Indigo, Cobalt, Emerald, Amber, Monochrome), System auto-theme, and customizable chat wallpapers.",
+    "Upgraded core messaging workflows across Web & Android: message pinning & unpinning, multi-conversation message forwarding, voice-note recording & playback, inline video/document previews, per-chat draft preservation, unread dividers, and scroll-to-latest navigation.",
+    "Personal Close-Connections Orbits & Community Spaces: private owner-isolated Inner Circle and Priority contacts with instant chat launch, live presence, and Orbit-only Moment & Feed audiences.",
+    "Unified authorized workspace search (⌘K / Discover) across People, Conversations, Groups, Messages, Moments, and Feed posts, backed by typed domain service modules and strict PostgreSQL RLS."
   ]
 }

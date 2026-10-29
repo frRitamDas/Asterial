@@ -27,6 +27,7 @@ const THEME_OPTIONS: AppearanceTheme[] = [
   "pitch",
   "graphite",
   "alabaster",
+  "system",
 ];
 
 interface LiveReleaseCheck {

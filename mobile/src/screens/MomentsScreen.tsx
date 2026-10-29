@@ -408,7 +408,11 @@ export function MomentsScreen() {
 
                 <Text style={{ color: palette.textMuted, fontSize: 10.5 }}>
                   {item.view_count} views ·{" "}
-                  {item.audience === "contacts" ? "Contacts" : "Everyone"}
+                  {item.audience === "orbit"
+                    ? "Close Orbit"
+                    : item.audience === "contacts"
+                      ? "Contacts"
+                      : "Everyone"}
                 </Text>
               </Pressable>
             );
@@ -707,7 +711,7 @@ export function MomentsScreen() {
               </View>
 
               <View style={styles.rowWrap}>
-                {(["everyone", "contacts"] as const).map((aud) => (
+                {(["everyone", "contacts", "orbit"] as const).map((aud) => (
                   <Pressable
                     key={aud}
                     onPress={() => setAudience(aud)}
@@ -732,7 +736,11 @@ export function MomentsScreen() {
                         fontWeight: "700",
                       }}
                     >
-                      {aud === "contacts" ? "Direct Contacts" : "Everyone"}
+                      {aud === "orbit"
+                        ? "Close Orbit"
+                        : aud === "contacts"
+                          ? "Direct Contacts"
+                          : "Everyone"}
                     </Text>
                   </Pressable>
                 ))}
