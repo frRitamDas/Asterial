@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   ALLOWED_ATTACHMENT_MIMES,
   ALLOWED_AVATAR_MIMES,
+  ALLOWED_SOCIAL_MEDIA_MIMES,
   MAX_ATTACHMENT_BYTES,
   MAX_AVATAR_BYTES,
 } from "../constants/brand";
@@ -87,6 +88,26 @@ export const groupCreateSchema = z.object({
   memberIds: z.array(z.string().uuid()).max(100).default([]),
 });
 
+export const closeOrbitSchema = z.object({
+  contactId: z.string().uuid(),
+  tier: z.enum(["inner", "priority"]).default("inner"),
+  note: z
+    .string()
+    .trim()
+    .max(160, "Orbit note cannot exceed 160 characters.")
+    .default(""),
+});
+
+export const closeOrbitUpsertSchema = closeOrbitSchema;
+
+export const forwardMessageSchema = z.object({
+  sourceMessageId: z.string().uuid(),
+  targetConversationIds: z
+    .array(z.string().uuid())
+    .min(1, "Select at least one destination conversation.")
+    .max(10, "You can forward to up to 10 conversations at once."),
+});
+
 export const orbitSlugSchema = z
   .string()
   .trim()
@@ -136,7 +157,7 @@ export const momentCreateSchema = z.object({
   backgroundTone: z
     .enum(["obsidian", "graphite", "slate", "ivory"])
     .default("obsidian"),
-  audience: z.enum(["everyone", "contacts"]).default("everyone"),
+  audience: z.enum(["everyone", "contacts", "orbit"]).default("everyone"),
   durationHours: z
     .union([z.literal(6), z.literal(12), z.literal(24), z.literal(48)])
     .default(24),
@@ -147,7 +168,7 @@ export const postBodySchema = z.object({
     .string()
     .trim()
     .max(2000, "Post cannot exceed 2,000 characters."),
-  visibility: z.enum(["public", "contacts"]).default("public"),
+  visibility: z.enum(["public", "contacts", "orbit"]).default("public"),
 });
 
 export const postCommentSchema = z.object({
@@ -156,6 +177,7 @@ export const postCommentSchema = z.object({
     .trim()
     .min(1, "Comment cannot be empty.")
     .max(1000, "Comment cannot exceed 1,000 characters."),
+  parentCommentId: z.string().uuid().nullable().optional(),
 });
 
 export const reportCreateSchema = z.object({
@@ -194,9 +216,12 @@ export function sanitizeRedirectPath(
 
 /**
  * Inspects file magic bytes so client-provided filenames or spoofed MIME types
- * (e.g., an executable renamed to .png) are rejected prior to upload.
+ * (e.g., an executable renamed to .png or .mp4) are rejected prior to upload.
  */
-export function detectBinaryMimeSignature(bytes: Uint8Array): string | null {
+export function detectBinaryMimeSignature(
+  bytes: Uint8Array,
+  declaredMime?: string | null
+): string | null {
   if (bytes.length >= 8) {
     if (
       bytes[0] === 0x89 &&
@@ -210,10 +235,23 @@ export function detectBinaryMimeSignature(bytes: Uint8Array): string | null {
     ) {
       return "image/png";
     }
+    // ISO Base Media File Format (MP4 / M4A): 'ftyp' at bytes 4..7
+    if (
+      bytes[4] === 0x66 &&
+      bytes[5] === 0x74 &&
+      bytes[6] === 0x79 &&
+      bytes[7] === 0x70
+    ) {
+      return declaredMime === "audio/mp4" ? "audio/mp4" : "video/mp4";
+    }
   }
   if (bytes.length >= 3) {
     if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
       return "image/jpeg";
+    }
+    // MP3 ID3 tag
+    if (bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) {
+      return "audio/mpeg";
     }
   }
   if (bytes.length >= 6) {
@@ -233,16 +271,45 @@ export function detectBinaryMimeSignature(bytes: Uint8Array): string | null {
       bytes[0] === 0x52 &&
       bytes[1] === 0x49 &&
       bytes[2] === 0x46 &&
-      bytes[3] === 0x46 &&
-      bytes[8] === 0x57 &&
-      bytes[9] === 0x45 &&
-      bytes[10] === 0x42 &&
-      bytes[11] === 0x50
+      bytes[3] === 0x46
     ) {
-      return "image/webp";
+      if (
+        bytes[8] === 0x57 &&
+        bytes[9] === 0x45 &&
+        bytes[10] === 0x42 &&
+        bytes[11] === 0x50
+      ) {
+        return "image/webp";
+      }
+      if (
+        bytes[8] === 0x57 &&
+        bytes[9] === 0x41 &&
+        bytes[10] === 0x56 &&
+        bytes[11] === 0x45
+      ) {
+        return "audio/wav";
+      }
     }
   }
   if (bytes.length >= 4) {
+    // EBML container (WebM video or WebM Opus voice note)
+    if (
+      bytes[0] === 0x1a &&
+      bytes[1] === 0x45 &&
+      bytes[2] === 0xdf &&
+      bytes[3] === 0xa3
+    ) {
+      return declaredMime?.startsWith("audio/") ? "audio/webm" : "video/webm";
+    }
+    // Ogg container (Ogg Opus / Vorbis)
+    if (
+      bytes[0] === 0x4f &&
+      bytes[1] === 0x67 &&
+      bytes[2] === 0x67 &&
+      bytes[3] === 0x53
+    ) {
+      return "audio/ogg";
+    }
     if (
       bytes[0] === 0x25 &&
       bytes[1] === 0x50 &&
@@ -269,6 +336,15 @@ export function detectBinaryMimeSignature(bytes: Uint8Array): string | null {
       return "application/x-executable";
     }
   }
+  if (bytes.length >= 2) {
+    // MPEG audio frame sync
+    if (
+      bytes[0] === 0xff &&
+      (bytes[1] === 0xfb || bytes[1] === 0xf3 || bytes[1] === 0xf2)
+    ) {
+      return "audio/mpeg";
+    }
+  }
   return null;
 }
 
@@ -281,14 +357,16 @@ export function validateUploadMetadataAndHeader(params: {
   byteSize: number;
   declaredMime?: string | null;
   headerBytes: Uint8Array;
-  kind: "avatar" | "attachment" | "social-image";
+  kind: "avatar" | "attachment" | "social-image" | "social-media";
 }): { ok: true; verifiedMime: string } | { ok: false; error: string } {
   const maxBytes =
     params.kind === "avatar" ? MAX_AVATAR_BYTES : MAX_ATTACHMENT_BYTES;
   const allowedMimes: readonly string[] =
     params.kind === "avatar" || params.kind === "social-image"
       ? ALLOWED_AVATAR_MIMES
-      : ALLOWED_ATTACHMENT_MIMES;
+      : params.kind === "social-media"
+        ? ALLOWED_SOCIAL_MEDIA_MIMES
+        : ALLOWED_ATTACHMENT_MIMES;
 
   if (params.byteSize <= 0) {
     return { ok: false, error: "Selected file is empty." };
@@ -298,7 +376,15 @@ export function validateUploadMetadataAndHeader(params: {
     return { ok: false, error: `File exceeds the ${mb} MB limit.` };
   }
 
-  const detectedBinary = detectBinaryMimeSignature(params.headerBytes);
+  const normalizedDeclared = (params.declaredMime || "")
+    .split(";")[0]
+    .trim()
+    .toLowerCase();
+
+  const detectedBinary = detectBinaryMimeSignature(
+    params.headerBytes,
+    normalizedDeclared
+  );
   if (detectedBinary === "application/x-executable") {
     return { ok: false, error: "Executable files are not permitted." };
   }
@@ -308,6 +394,17 @@ export function validateUploadMetadataAndHeader(params: {
       return {
         ok: false,
         error: "Media must be a valid PNG, JPEG, WebP, or GIF image.",
+      };
+    }
+    return { ok: true, verifiedMime: detectedBinary };
+  }
+
+  if (params.kind === "social-media") {
+    if (!detectedBinary || !allowedMimes.includes(detectedBinary)) {
+      return {
+        ok: false,
+        error:
+          "Media must be a valid PNG, JPEG, WebP, GIF image or MP4/WebM video (up to 25 MB).",
       };
     }
     return { ok: true, verifiedMime: detectedBinary };
@@ -332,16 +429,15 @@ export function validateUploadMetadataAndHeader(params: {
     csv: "text/csv",
     json: "application/json",
   };
-  const declared = params.declaredMime || "";
-  const inferred = allowedMimes.includes(declared)
-    ? declared
+  const inferred = allowedMimes.includes(normalizedDeclared)
+    ? normalizedDeclared
     : textMimeMap[ext] || "";
 
   if (!inferred || !allowedMimes.includes(inferred)) {
     return {
       ok: false,
       error:
-        "Allowed formats: PNG, JPG, WebP, GIF, PDF, ZIP, TXT, MD, CSV, JSON (up to 15 MB).",
+        "Allowed formats: PNG, JPG, WebP, GIF, MP4, WebM, Audio, PDF, ZIP, TXT, MD, CSV, JSON (up to 25 MB).",
     };
   }
 

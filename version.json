@@ -1,8 +1,8 @@
 {
   "name": "ASTERIAL",
-  "version": "1.4.2",
-  "displayVersion": "1.4.2",
-  "versionCode": 14200,
+  "version": "1.4.5",
+  "displayVersion": "1.4.5",
+  "versionCode": 14500,
   "channel": "stable",
   "developer": "Ritam Das",
   "attribution": "By X Huracan",
@@ -11,9 +11,9 @@
   "githubRepo": "frRitamDas/Asterial",
   "releaseDate": "October 2026",
   "releaseNotes": [
-    "Major communication-first redesign across web and native Android: cleaner chat-first navigation, clearer hierarchy, quieter surfaces, and consistent spacing.",
-    "Refresh sign-in, sign-up, and first-run onboarding with clearer copy, welcoming motion, and a simpler account setup flow.",
-    "Refined conversation list and navigation visual language while preserving existing chat, Orbits, Moments, Feed, profile, and settings functionality.",
-    "Public-facing experience avoids source-code repository links; official product access and Android download remain on the product website."
+    "Complete v1.4.5 full-stack messaging & social reconstruction: deep-charcoal workspace (#090A0C / #101216 / #171A20), selective accent themes (Indigo, Cobalt, Emerald, Amber, Monochrome), System auto-theme, and customizable chat wallpapers.",
+    "Upgraded core messaging workflows across Web & Android: message pinning & unpinning, multi-conversation message forwarding, voice-note recording & playback, inline video/document previews, per-chat draft preservation, unread dividers, and scroll-to-latest navigation.",
+    "Personal Close-Connections Orbits & Community Spaces: private owner-isolated Inner Circle and Priority contacts with instant chat launch, live presence, and Orbit-only Moment & Feed audiences.",
+    "Unified authorized workspace search (⌘K / Discover) across People, Conversations, Groups, Messages, Moments, and Feed posts, backed by typed domain service modules and strict PostgreSQL RLS."
   ]
 }

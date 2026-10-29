@@ -1,120 +1,25 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Aperture,
   Compass,
-  Globe,
-  Layers,
-  LayoutList,
-  LogOut,
+  Contact2,
+  Flame,
   MessageSquare,
+  Orbit,
   Search,
   Settings,
-  UserCircle,
+  UserRound,
   WifiOff,
 } from "lucide-react";
 import { AsterialMark } from "@/components/brand/AsterialLogo";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
 import { ConversationSidebar } from "@/components/workspace/ConversationSidebar";
-import { OnboardingModal } from "@/components/workspace/OnboardingModal";
 import { WorkspaceModals } from "@/components/workspace/WorkspaceModals";
 import { Avatar } from "@/components/ui/Avatar";
-import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { cn } from "@/lib/utils/cn";
-import { ASTERIAL_BRAND } from "@/lib/constants/brand";
-
-const DESKTOP_NAV_ITEMS = [
-  {
-    href: "/app/chats",
-    matchPrefix: "/app/chats",
-    label: "Chats",
-    icon: MessageSquare,
-  },
-  {
-    href: "/app/groups",
-    matchPrefix: "/app/groups",
-    label: "Groups",
-    icon: Layers,
-  },
-  {
-    href: "/app/orbits",
-    matchPrefix: "/app/orbits",
-    label: "Orbits",
-    icon: Globe,
-  },
-  {
-    href: "/app/moments",
-    matchPrefix: "/app/moments",
-    label: "Moments",
-    icon: Aperture,
-  },
-  {
-    href: "/app/feed",
-    matchPrefix: "/app/feed",
-    label: "Feed",
-    icon: LayoutList,
-  },
-  {
-    href: "/app/contacts",
-    matchPrefix: "/app/contacts",
-    label: "People",
-    icon: Compass,
-  },
-  {
-    href: "/app/profile",
-    matchPrefix: "/app/profile",
-    label: "Profile",
-    icon: UserCircle,
-  },
-  {
-    href: "/app/settings",
-    matchPrefix: "/app/settings",
-    label: "Settings",
-    icon: Settings,
-  },
-] as const;
-
-const MOBILE_NAV_ITEMS = [
-  {
-    href: "/app/chats",
-    matchPrefix: "/app/chats",
-    label: "Chats",
-    icon: MessageSquare,
-  },
-  {
-    href: "/app/orbits",
-    matchPrefix: "/app/orbits",
-    label: "Orbits",
-    icon: Globe,
-  },
-  {
-    href: "/app/moments",
-    matchPrefix: "/app/moments",
-    label: "Moments",
-    icon: Aperture,
-  },
-  {
-    href: "/app/feed",
-    matchPrefix: "/app/feed",
-    label: "Feed",
-    icon: LayoutList,
-  },
-  {
-    href: "/app/contacts",
-    matchPrefix: "/app/contacts",
-    label: "People",
-    icon: Compass,
-  },
-  {
-    href: "/app/settings",
-    matchPrefix: "/app/settings",
-    label: "Settings",
-    icon: Settings,
-  },
-] as const;
 
 export function WorkspaceShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -123,195 +28,236 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
     totalUnreadCount,
     isNetworkOnline,
     setActiveModal,
-    signOut,
   } = useWorkspace();
 
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        setActiveModal("search");
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [setActiveModal]);
-
+  const isInSpecificChat = /^\/app\/chats\/[^/]+/.test(pathname);
   const isChatsSection = pathname.startsWith("/app/chats");
-  const isActiveChatThread =
-    pathname.startsWith("/app/chats/") && pathname !== "/app/chats";
-  const isActiveOrbitThread =
-    pathname.startsWith("/app/orbits/") && pathname !== "/app/orbits";
+
+  const primaryDestinations = [
+    {
+      href: "/app/chats",
+      label: "Chats",
+      icon: MessageSquare,
+      active: pathname.startsWith("/app/chats") || pathname.startsWith("/app/groups"),
+      badge: totalUnreadCount,
+    },
+    {
+      href: "/app/orbits",
+      label: "Orbits",
+      icon: Orbit,
+      active: pathname.startsWith("/app/orbits"),
+      badge: 0,
+    },
+    {
+      href: "/app/moments",
+      label: "Moments",
+      icon: Flame,
+      active: pathname.startsWith("/app/moments"),
+      badge: 0,
+    },
+    {
+      href: "/app/feed",
+      label: "Feed",
+      icon: Compass,
+      active: pathname.startsWith("/app/feed"),
+      badge: 0,
+    },
+    {
+      href: "/app/contacts",
+      label: "Discover",
+      icon: Contact2,
+      active: pathname.startsWith("/app/contacts"),
+      badge: 0,
+    },
+    {
+      href: "/app/settings",
+      label: "Settings",
+      icon: Settings,
+      active:
+        pathname.startsWith("/app/settings") ||
+        pathname.startsWith("/app/profile"),
+      badge: 0,
+    },
+  ];
 
   return (
-    <div className="flex h-dvh w-full flex-col overflow-hidden bg-[var(--bg-canvas)]">
-      {/* Offline Reconnection Banner */}
+    <div className="flex h-dvh w-full flex-col overflow-hidden bg-[var(--bg-canvas)] text-[var(--text-primary)]">
+      {/* Offline / Reconnecting Banner */}
       {!isNetworkOnline && (
         <div
           role="status"
-          className="flex items-center justify-center gap-2 border-b border-white/15 bg-[var(--bg-elevated)] px-4 py-1.5 text-xs text-zinc-200"
+          className="flex items-center justify-center gap-2 border-b border-amber-500/30 bg-amber-500/12 px-4 py-1.5 text-xs text-amber-200 shrink-0"
         >
           <WifiOff className="h-3.5 w-3.5 shrink-0" />
           <span>
-            Connection interrupted — ASTERIAL will automatically resynchronize
-            once back online.
+            Connection interrupted — messages will remain in pending/retry state
+            until network connectivity returns.
           </span>
         </div>
       )}
 
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        {/* Desktop Primary Navigation Rail */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* Desktop Navigation Rail */}
         <nav
-          aria-label="Workspace navigation"
+          aria-label="Primary navigation"
           className="hidden md:flex w-[68px] shrink-0 flex-col items-center justify-between border-r border-[var(--border-subtle)] bg-[var(--bg-void)] py-4"
         >
-          <div className="flex flex-col items-center gap-3">
+          <div className="flex flex-col items-center gap-2.5">
             <Link
               href="/app/chats"
-              title={`${ASTERIAL_BRAND.name} v${ASTERIAL_BRAND.version}`}
-              className="rounded-xl p-1 hover:opacity-90 transition-opacity"
+              aria-label="ASTERIAL Home"
+              className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border-strong)] bg-[var(--bg-surface)] text-[var(--text-primary)] hover:border-[var(--border-active)] transition-colors"
             >
-              <AsterialMark size={32} />
+              <AsterialMark className="h-5 w-5" />
             </Link>
+
+            {primaryDestinations.slice(0, 5).map((item) => {
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  title={item.label}
+                  aria-label={item.label}
+                  aria-current={item.active ? "page" : undefined}
+                  className={cn(
+                    "relative flex h-10 w-10 items-center justify-center rounded-xl transition-all",
+                    item.active
+                      ? "bg-[var(--accent-primary)] text-[var(--accent-primary-fg)] shadow-sm"
+                      : "text-[var(--text-secondary)] hover:bg-white/[0.05] hover:text-[var(--text-primary)]"
+                  )}
+                >
+                  <Icon className="h-4.5 w-4.5" />
+                  {item.badge > 0 && (
+                    <span
+                      className={cn(
+                        "absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 font-mono text-[10px] font-bold border",
+                        item.active
+                          ? "bg-[var(--bg-void)] text-[var(--text-primary)] border-[var(--border-strong)]"
+                          : "bg-[var(--accent-primary)] text-[var(--accent-primary-fg)] border-[var(--bg-void)]"
+                      )}
+                    >
+                      {item.badge > 99 ? "99+" : item.badge}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
 
             <button
               type="button"
               onClick={() => setActiveModal("search")}
-              title="Search messages & people (⌘K)"
-              aria-label="Search messages and conversations"
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-zinc-400 hover:bg-white/[0.08] hover:text-white transition-colors cursor-pointer"
+              title="Unified Search (⌘K)"
+              aria-label="Unified Search"
+              className="flex h-10 w-10 items-center justify-center rounded-xl text-[var(--text-secondary)] hover:bg-white/[0.05] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
             >
-              <Search className="h-4 w-4" />
+              <Search className="h-4.5 w-4.5" />
             </button>
-
-            <div className="h-px w-7 bg-white/[0.08]" />
-
-            <div className="flex flex-col items-center gap-1">
-              {DESKTOP_NAV_ITEMS.map((item) => {
-                const Icon = item.icon;
-                const active = pathname.startsWith(item.matchPrefix);
-                const showBadge =
-                  item.href === "/app/chats" && totalUnreadCount > 0;
-
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    title={item.label}
-                    aria-label={item.label}
-                    aria-current={active ? "page" : undefined}
-                    className={cn(
-                      "relative flex h-9 w-9 items-center justify-center rounded-xl transition-colors",
-                      active
-                        ? "bg-white text-zinc-950"
-                        : "text-zinc-400 hover:bg-white/[0.06] hover:text-white"
-                    )}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {showBadge && (
-                      <span
-                        className={cn(
-                          "absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 font-mono text-[9px] font-bold",
-                          active
-                            ? "bg-zinc-950 text-white ring-2 ring-white"
-                            : "bg-white text-zinc-950"
-                        )}
-                      >
-                        {totalUnreadCount > 99 ? "99+" : totalUnreadCount}
-                      </span>
-                    )}
-                  </Link>
-                );
-              })}
-            </div>
           </div>
 
           <div className="flex flex-col items-center gap-2.5">
-            {profile && (
-              <Link
-                href="/app/profile"
-                title={`${profile.display_name} (@${profile.username})`}
-              >
+            <Link
+              href="/app/settings"
+              title="Settings"
+              aria-label="Settings"
+              aria-current={pathname.startsWith("/app/settings") ? "page" : undefined}
+              className={cn(
+                "flex h-10 w-10 items-center justify-center rounded-xl transition-colors",
+                pathname.startsWith("/app/settings")
+                  ? "bg-[var(--accent-primary)] text-[var(--accent-primary-fg)]"
+                  : "text-[var(--text-secondary)] hover:bg-white/[0.05] hover:text-[var(--text-primary)]"
+              )}
+            >
+              <Settings className="h-4.5 w-4.5" />
+            </Link>
+
+            <Link
+              href="/app/profile"
+              title={
+                profile
+                  ? `${profile.display_name} (@${profile.username})`
+                  : "Profile"
+              }
+              aria-label="Your profile"
+              className={cn(
+                "rounded-full p-0.5 transition-all",
+                pathname.startsWith("/app/profile")
+                  ? "ring-2 ring-[var(--accent-primary)]"
+                  : "opacity-90 hover:opacity-100"
+              )}
+            >
+              {profile ? (
                 <Avatar
                   name={profile.display_name}
                   avatarPath={profile.avatar_url}
                   size="sm"
-                  online={
-                    isNetworkOnline && profile.presence_visibility !== "nobody"
-                  }
-                  showPresence
                 />
-              </Link>
-            )}
-            <button
-              type="button"
-              onClick={() => void signOut()}
-              title="Sign out"
-              aria-label="Sign out"
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200 transition-colors cursor-pointer"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
+              ) : (
+                <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-white/[0.05]">
+                  <UserRound className="h-4 w-4 text-zinc-300" />
+                </div>
+              )}
+            </Link>
           </div>
         </nav>
 
-        {/* Dedicated Conversation Sidebar (Desktop on /app/chats/*; Mobile only on /app/chats) */}
-        {isChatsSection && (
-          <ConversationSidebar
-            className={cn(
-              "w-full md:w-[320px] lg:w-[340px] shrink-0",
-              isActiveChatThread ? "hidden md:flex" : "flex"
-            )}
-          />
-        )}
+        {/* Conversation Sidebar Pane */}
+        <ConversationSidebar
+          className={cn(
+            "w-full md:w-80 lg:w-[348px] shrink-0",
+            isChatsSection
+              ? isInSpecificChat
+                ? "hidden md:flex"
+                : "flex"
+              : "hidden lg:flex"
+          )}
+        />
 
-        {/* Main Workspace Panel */}
+        {/* Active Workspace Pane */}
         <main
           className={cn(
-            "flex min-w-0 flex-1 flex-col overflow-hidden bg-[var(--bg-canvas)]",
+            "flex-1 min-w-0 min-h-0 flex flex-col bg-[var(--bg-canvas)]",
             pathname === "/app/chats" ? "hidden md:flex" : "flex"
           )}
         >
-          <ErrorBoundary>{children}</ErrorBoundary>
+          {children}
         </main>
       </div>
 
-      {/* Mobile Bottom Navigation (Hidden inside active full-screen chat or Orbit room) */}
-      {!isActiveChatThread && !isActiveOrbitThread && (
+      {/* Dedicated Mobile Bottom Navigation (hidden inside active full-screen chat view) */}
+      {!isInSpecificChat && (
         <nav
           aria-label="Mobile navigation"
-          className="flex md:hidden items-center justify-around border-t border-[var(--border-subtle)] bg-[var(--bg-void)] px-1 pt-1.5 pb-1.5 pb-safe"
+          className="flex md:hidden items-center justify-around border-t border-[var(--border-subtle)] bg-[var(--bg-surface)] px-1 py-1.5 pb-safe shrink-0"
         >
-          {MOBILE_NAV_ITEMS.map((item) => {
+          {primaryDestinations.map((item) => {
             const Icon = item.icon;
-            const active = pathname.startsWith(item.matchPrefix);
-            const showBadge =
-              item.href === "/app/chats" && totalUnreadCount > 0;
-
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                aria-current={active ? "page" : undefined}
                 className={cn(
-                  "relative flex min-h-[44px] min-w-[48px] flex-col items-center justify-center gap-0.5 rounded-xl px-2 py-1 text-[10px] font-medium transition-colors",
-                  active ? "text-white" : "text-zinc-500 hover:text-zinc-300"
+                  "relative flex flex-col items-center gap-0.5 rounded-xl px-2.5 py-1.5 text-[10px] font-medium transition-colors",
+                  item.active
+                    ? "text-[var(--accent-primary)]"
+                    : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                 )}
               >
-                <Icon className="h-4 w-4" />
+                <div className="relative">
+                  <Icon className="h-4.5 w-4.5" />
+                  {item.badge > 0 && (
+                    <span className="absolute -right-2 -top-1 inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-[var(--accent-primary)] px-1 font-mono text-[9px] font-bold text-[var(--accent-primary-fg)]">
+                      {item.badge > 99 ? "99+" : item.badge}
+                    </span>
+                  )}
+                </div>
                 <span>{item.label}</span>
-                {showBadge && (
-                  <span className="absolute right-1 top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-white px-1 font-mono text-[9px] font-bold text-zinc-950">
-                    {totalUnreadCount > 99 ? "99+" : totalUnreadCount}
-                  </span>
-                )}
               </Link>
             );
           })}
         </nav>
       )}
 
-      <OnboardingModal />
       <WorkspaceModals />
     </div>
   );

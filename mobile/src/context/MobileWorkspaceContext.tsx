@@ -8,11 +8,12 @@ import React, {
   useState,
 } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Linking } from "react-native";
+import { Linking, useColorScheme } from "react-native";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import {
   THEME_PALETTES,
   parseAuthDeepLink,
+  resolveAppearanceTheme,
   sortConversationSummaries,
   type AppearanceTheme,
   type ConversationMemberRow,
@@ -124,6 +125,7 @@ export function MobileWorkspaceProvider({
 }: {
   children: React.ReactNode;
 }) {
+  const colorScheme = useColorScheme();
   const [supabase, setSupabase] = useState<SupabaseClient | null>(null);
   const [bootStatus, setBootStatus] = useState<MobileBootStatus>("booting");
   const [user, setUser] = useState<User | null>(null);
@@ -1065,7 +1067,12 @@ export function MobileWorkspaceProvider({
   }, [profile, supabase, user]);
 
   const theme: AppearanceTheme = preferences?.appearance_theme ?? cachedTheme;
-  const palette: ThemePalette = THEME_PALETTES[theme] || THEME_PALETTES.obsidian;
+  const resolvedThemeKey = resolveAppearanceTheme(
+    theme,
+    colorScheme === "light"
+  );
+  const palette: ThemePalette =
+    THEME_PALETTES[resolvedThemeKey] || THEME_PALETTES.obsidian;
   const density: MessageDensity =
     preferences?.message_density ?? cachedDensity;
   const reducedMotion: boolean = preferences?.reduced_motion ?? false;

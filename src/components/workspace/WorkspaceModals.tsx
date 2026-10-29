@@ -1,10 +1,13 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Camera,
   Check,
+  Compass,
+  CornerUpRight,
+  Flame,
   Loader2,
   MessageSquare,
   Search,
@@ -16,60 +19,77 @@ import { Dialog } from "@/components/ui/Dialog";
 import { Input, Textarea } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Avatar } from "@/components/ui/Avatar";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { primeAvatarSignedUrls, uploadAvatarFile } from "@/lib/supabase/storage";
-import { formatShortTime } from "@/lib/utils/format";
+import { Badge } from "@/components/ui/Badge";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { useToast } from "@/components/ui/Toast";
+import {
+  contactsService,
+  groupsService,
+  mediaService,
+  messagesService,
+  searchService,
+  type UnifiedSearchResults,
+} from "@/lib/services";
 import {
   groupCreateSchema,
   reportCreateSchema,
 } from "@/lib/validation/schemas";
-import { useToast } from "@/components/ui/Toast";
+import { formatPresenceStatus, formatShortTime, isUserOnline } from "@/lib/utils/format";
 import type {
-  MessageSearchResult,
   ReportCategory,
   UserSearchResult,
 } from "@/lib/types/database";
 
 export function WorkspaceModals() {
-  const { activeModal, reportTarget } = useWorkspace();
+  const { activeModal, reportTarget, forwardingMessage } = useWorkspace();
   return (
     <>
-      {activeModal === "new-dm" && <NewDirectConversationModal />}
-      {activeModal === "new-group" && <CreateGroupModal />}
-      {activeModal === "search" && <GlobalSearchModal />}
-      {reportTarget && <ReportModal />}
+      {activeModal === "new-dm" && <NewDirectMessageModal />}
+      {activeModal === "new-group" && <NewGroupModal />}
+      {activeModal === "search" && <UnifiedSearchModal />}
+      {reportTarget && <ReportModal key={reportTarget.label} />}
+      {forwardingMessage && (
+        <ForwardMessageModal key={forwardingMessage.id} />
+      )}
     </>
   );
 }
 
-function NewDirectConversationModal() {
+function NewDirectMessageModal() {
   const router = useRouter();
-  const { setActiveModal, startDirectConversation, onlineUserIds } =
-    useWorkspace();
-  const open = true;
+  const {
+    setActiveModal,
+    startDirectConversation,
+    onlineUserIds,
+    closeOrbitMap,
+  } = useWorkspace();
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<UserSearchResult[]>([]);
-  const [resolvedQuery, setResolvedQuery] = useState<string | null>(null);
-  const [startingId, setStartingId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [startingUserId, setStartingUserId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
     const timer = window.setTimeout(async () => {
+      setLoading(true);
+      setError(null);
       try {
-        const supabase = getSupabaseBrowserClient();
-        const { data } = await supabase.rpc("search_users", {
-          p_query: query,
-          p_limit: 20,
-        });
-        if (!active) return;
-        const list = (data || []) as UserSearchResult[];
-        void primeAvatarSignedUrls(list.map((u) => u.avatar_url));
-        setResults(list);
-      } finally {
-        if (active) setResolvedQuery(query);
+        const items = await contactsService.searchUsers(query, 24);
+        if (active) {
+          setResults(items);
+          setLoading(false);
+        }
+      } catch (err) {
+        if (active) {
+          setError(
+            err instanceof Error ? err.message : "Could not load directory."
+          );
+          setLoading(false);
+        }
       }
-    }, 220);
+    }, 200);
 
     return () => {
       active = false;
@@ -77,12 +97,10 @@ function NewDirectConversationModal() {
     };
   }, [query]);
 
-  const loading = resolvedQuery !== query;
-
   const handleSelect = async (target: UserSearchResult) => {
-    setStartingId(target.id);
+    setStartingUserId(target.id);
     const convId = await startDirectConversation(target.id);
-    setStartingId(null);
+    setStartingUserId(null);
     if (convId) {
       setActiveModal(null);
       router.push(`/app/chats/${convId}`);
@@ -91,70 +109,86 @@ function NewDirectConversationModal() {
 
   return (
     <Dialog
-      open={open}
+      open
       onClose={() => setActiveModal(null)}
-      title="New direct conversation"
-      description="Search by @username or display name to begin a real-time thread."
+      title="New direct message"
+      description="Search by @username or display name. Private email addresses are never exposed."
     >
       <div className="space-y-4">
         <Input
-          placeholder="Search @username or name..."
+          placeholder="Search @username or name…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           leftAddon={<Search className="h-4 w-4" />}
           autoFocus
         />
 
+        {error && (
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+            {error}
+          </div>
+        )}
+
         <div className="max-h-72 overflow-y-auto space-y-1.5 pr-1">
           {loading ? (
-            <div className="flex items-center justify-center py-10 text-xs text-zinc-500 gap-2">
+            <div className="flex items-center justify-center py-10 text-xs text-[var(--text-muted)] gap-2">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Searching directory...
+              Searching directory…
             </div>
           ) : results.length === 0 ? (
-            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-6 text-center text-xs text-zinc-500">
-              {query.trim()
-                ? `No users found matching "${query.trim()}".`
-                : "No other registered users yet. Invite someone to ASTERIAL."}
+            <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-canvas)] py-8 px-4 text-center text-xs text-[var(--text-muted)]">
+              No matching people found.
             </div>
           ) : (
-            results.map((item) => {
-              const isOnline = onlineUserIds.has(item.id);
-              const disabled =
-                item.is_blocked_by_me || item.allow_direct_messages === "none";
+            results.map((person) => {
+              const online =
+                onlineUserIds.has(person.id) || isUserOnline(person.last_seen_at);
+              const dmsDisabled =
+                person.allow_direct_messages === "none" ||
+                person.is_blocked_by_me;
+              const inOrbit = closeOrbitMap.has(person.id);
+
               return (
                 <div
-                  key={item.id}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-[var(--bg-canvas)] p-2.5 hover:border-white/15 transition-colors"
+                  key={person.id}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-canvas)] p-2.5 hover:border-[var(--border-strong)] transition-colors"
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <Avatar
-                      name={item.display_name}
-                      avatarPath={item.avatar_url}
+                      name={person.display_name}
+                      avatarPath={person.avatar_url}
                       size="md"
-                      online={isOnline}
+                      online={online}
                       showPresence
                     />
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-white truncate">
-                        {item.display_name}
-                      </p>
-                      <p className="text-xs text-zinc-400 font-mono truncate">
-                        @{item.username}
-                        {item.status_text ? ` · ${item.status_text}` : ""}
+                      <div className="flex items-center gap-1.5">
+                        <p className="truncate text-sm font-medium text-[var(--text-primary)]">
+                          {person.display_name}
+                        </p>
+                        {inOrbit && (
+                          <Badge variant="accent" size="sm">
+                            Orbit
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="truncate text-xs text-[var(--text-muted)] font-mono">
+                        @{person.username} ·{" "}
+                        {formatPresenceStatus(person.last_seen_at, online)}
                       </p>
                     </div>
                   </div>
+
                   <Button
                     size="sm"
-                    variant={disabled ? "ghost" : "secondary"}
-                    disabled={disabled}
-                    loading={startingId === item.id}
-                    onClick={() => handleSelect(item)}
+                    variant={dmsDisabled ? "secondary" : "primary"}
+                    disabled={dmsDisabled || startingUserId !== null}
+                    loading={startingUserId === person.id}
+                    onClick={() => handleSelect(person)}
                   >
-                    {item.is_blocked_by_me
+                    {person.is_blocked_by_me
                       ? "Blocked"
-                      : item.allow_direct_messages === "none"
+                      : person.allow_direct_messages === "none"
                         ? "DMs closed"
                         : "Message"}
                   </Button>
@@ -168,38 +202,35 @@ function NewDirectConversationModal() {
   );
 }
 
-function CreateGroupModal() {
+function NewGroupModal() {
   const router = useRouter();
   const { user, setActiveModal, refreshConversations } = useWorkspace();
   const { pushToast } = useToast();
-  const open = true;
-  const fileRef = useRef<HTMLInputElement | null>(null);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [avatarPath, setAvatarPath] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
   const [query, setQuery] = useState("");
   const [candidates, setCandidates] = useState<UserSearchResult[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<UserSearchResult[]>([]);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     let active = true;
     const timer = window.setTimeout(async () => {
-      const supabase = getSupabaseBrowserClient();
-      const { data } = await supabase.rpc("search_users", {
-        p_query: query,
-        p_limit: 20,
-      });
-      if (!active) return;
-      const list = ((data || []) as UserSearchResult[]).filter(
-        (u) => !u.is_blocked_by_me
-      );
-      void primeAvatarSignedUrls(list.map((u) => u.avatar_url));
-      setCandidates(list);
-    }, 220);
+      try {
+        const items = await contactsService.searchUsers(query, 20);
+        if (active) {
+          setCandidates(items.filter((u) => !u.is_blocked_by_me));
+        }
+      } catch {
+        // Ignore transient directory errors while typing
+      }
+    }, 200);
 
     return () => {
       active = false;
@@ -209,17 +240,19 @@ function CreateGroupModal() {
 
   const handleGroupAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    e.target.value = "";
     if (!file || !user) return;
     setUploadingAvatar(true);
     setError(null);
     try {
-      const path = await uploadAvatarFile(user.id, file, "group");
-      setAvatarPath(path);
+      const uploaded = await mediaService.uploadAvatarFile(user.id, file, "group");
+      setAvatarPath(uploaded);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to upload icon.");
+      setError(
+        err instanceof Error ? err.message : "Failed to upload group avatar."
+      );
     } finally {
       setUploadingAvatar(false);
+      if (fileRef.current) fileRef.current.value = "";
     }
   };
 
@@ -242,28 +275,18 @@ function CreateGroupModal() {
     });
 
     if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message || "Invalid group details.");
+      setError(parsed.error.issues[0]?.message || "Check group details.");
       return;
     }
 
     setCreating(true);
     try {
-      const supabase = getSupabaseBrowserClient();
-      const { data: convId, error: rpcErr } = await supabase.rpc(
-        "create_group_conversation",
-        {
-          p_name: parsed.data.name,
-          p_description: parsed.data.description,
-          p_member_ids: parsed.data.memberIds,
-          p_avatar_url: avatarPath,
-        }
-      );
-
-      if (rpcErr || !convId) {
-        setError(rpcErr?.message || "Failed to create group.");
-        setCreating(false);
-        return;
-      }
+      const convId = await groupsService.createGroup({
+        name: parsed.data.name,
+        description: parsed.data.description,
+        memberIds: parsed.data.memberIds,
+        avatarUrl: avatarPath,
+      });
 
       await refreshConversations();
       setActiveModal(null);
@@ -271,9 +294,11 @@ function CreateGroupModal() {
         title: `Created "${parsed.data.name}"`,
         variant: "success",
       });
-      router.push(`/app/chats/${String(convId)}`);
-    } catch {
-      setError("Network error while creating group.");
+      router.push(`/app/chats/${convId}`);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Unable to create group right now."
+      );
     } finally {
       setCreating(false);
     }
@@ -281,7 +306,7 @@ function CreateGroupModal() {
 
   return (
     <Dialog
-      open={open}
+      open
       onClose={() => setActiveModal(null)}
       title="Create a group"
       description="Assemble a role-governed space for your team, friends, or community."
@@ -335,14 +360,14 @@ function CreateGroupModal() {
 
         <Input
           label="Description (optional)"
-          placeholder="Purpose or topic of this group..."
+          placeholder="Purpose or topic of this group…"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           maxLength={300}
         />
 
         <div className="space-y-2">
-          <label className="text-xs font-medium tracking-wide text-zinc-300">
+          <label className="text-xs font-medium tracking-wide text-[var(--text-secondary)]">
             Add members ({selectedUsers.length} selected)
           </label>
           {selectedUsers.length > 0 && (
@@ -350,14 +375,14 @@ function CreateGroupModal() {
               {selectedUsers.map((u) => (
                 <span
                   key={u.id}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.06] px-2.5 py-1 text-xs text-white"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-active)] bg-[var(--accent-signal-subtle)] px-2.5 py-1 text-xs text-[var(--text-primary)]"
                 >
                   {u.display_name}
                   <button
                     type="button"
                     aria-label={`Remove ${u.display_name}`}
                     onClick={() => toggleMember(u)}
-                    className="text-zinc-400 hover:text-white cursor-pointer"
+                    className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -367,15 +392,15 @@ function CreateGroupModal() {
           )}
 
           <Input
-            placeholder="Filter people by @username or name..."
+            placeholder="Filter people by @username or name…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             leftAddon={<Users className="h-4 w-4" />}
           />
 
-          <div className="max-h-44 overflow-y-auto space-y-1 rounded-xl border border-white/[0.07] bg-[var(--bg-canvas)] p-2">
+          <div className="max-h-44 overflow-y-auto space-y-1 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-canvas)] p-2">
             {candidates.length === 0 ? (
-              <p className="py-5 text-center text-xs text-zinc-500">
+              <p className="py-5 text-center text-xs text-[var(--text-muted)]">
                 No matching users found. You can still create the group and add
                 members later.
               </p>
@@ -396,10 +421,10 @@ function CreateGroupModal() {
                         size="sm"
                       />
                       <div className="min-w-0">
-                        <p className="text-xs font-medium text-white truncate">
+                        <p className="text-xs font-medium text-[var(--text-primary)] truncate">
                           {c.display_name}
                         </p>
-                        <p className="text-[11px] font-mono text-zinc-500 truncate">
+                        <p className="text-[11px] font-mono text-[var(--text-muted)] truncate">
                           @{c.username}
                         </p>
                       </div>
@@ -407,7 +432,7 @@ function CreateGroupModal() {
                     <div
                       className={`flex h-5 w-5 items-center justify-center rounded-md border ${
                         selected
-                          ? "border-white bg-white text-zinc-950"
+                          ? "border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--accent-primary-fg)]"
                           : "border-white/20"
                       }`}
                     >
@@ -437,16 +462,27 @@ function CreateGroupModal() {
   );
 }
 
-function GlobalSearchModal() {
+type SearchCategory =
+  | "all"
+  | "users"
+  | "chats"
+  | "groups"
+  | "messages"
+  | "moments"
+  | "posts";
+
+function UnifiedSearchModal() {
   const router = useRouter();
-  const { setActiveModal, conversations } = useWorkspace();
-  const open = true;
+  const { setActiveModal, conversations, startDirectConversation } =
+    useWorkspace();
 
   const [query, setQuery] = useState("");
-  const [fetchedMessages, setFetchedMessages] = useState<{
+  const [category, setCategory] = useState<SearchCategory>("all");
+  const [resultsState, setResultsState] = useState<{
     query: string;
-    items: MessageSearchResult[];
+    data: UnifiedSearchResults;
   } | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const trimmed = query.trim();
 
@@ -457,71 +493,119 @@ function GlobalSearchModal() {
 
     let active = true;
     const timer = window.setTimeout(async () => {
-      const supabase = getSupabaseBrowserClient();
-      const { data } = await supabase.rpc("search_messages", {
-        p_query: trimmed,
-        p_conversation_id: null,
-        p_limit: 25,
-      });
-      if (active) {
-        setFetchedMessages({
+      try {
+        setError(null);
+        const data = await searchService.unifiedSearch({
           query: trimmed,
-          items: (data || []) as MessageSearchResult[],
+          localConversations: conversations,
+          limitPerSection: 12,
         });
+        if (active) {
+          setResultsState({ query: trimmed, data });
+        }
+      } catch (err) {
+        if (active) {
+          setError(err instanceof Error ? err.message : "Search failed.");
+        }
       }
-    }, 250);
+    }, 240);
 
     return () => {
       active = false;
       window.clearTimeout(timer);
     };
-  }, [trimmed]);
+  }, [conversations, trimmed]);
 
-  const loading = trimmed.length >= 2 && fetchedMessages?.query !== trimmed;
-  const messages =
-    trimmed.length >= 2 && fetchedMessages?.query === trimmed
-      ? fetchedMessages.items
-      : [];
+  const loading = trimmed.length >= 2 && resultsState?.query !== trimmed && !error;
+  const data: UnifiedSearchResults = useMemo(() => {
+    if (trimmed.length >= 2 && resultsState?.query === trimmed) {
+      return resultsState.data;
+    }
+    return {
+      users: [],
+      conversations: [],
+      groups: [],
+      messages: [],
+      moments: [],
+      posts: [],
+    };
+  }, [resultsState, trimmed]);
 
-  const matchingConvs = conversations.filter((c) => {
-    const q = query.trim().toLowerCase();
-    if (!q) return false;
-    return (
-      c.displayTitle.toLowerCase().includes(q) ||
-      c.displaySubtitle.toLowerCase().includes(q)
-    );
-  });
+  const totalMatches =
+    data.users.length +
+    data.conversations.length +
+    data.groups.length +
+    data.messages.length +
+    data.moments.length +
+    data.posts.length;
+
+  const showSection = (sec: Exclude<SearchCategory, "all">) =>
+    category === "all" || category === sec;
 
   return (
     <Dialog
-      open={open}
+      open
       onClose={() => setActiveModal(null)}
-      title="Search workspace"
-      description="Jump to conversations or find messages across your accessible threads."
-      maxWidthClass="max-w-xl"
+      title="Unified Workspace Search"
+      description="Authorized search across People, Direct Chats, Groups, Messages, Moments, and Feed."
+      maxWidthClass="max-w-2xl"
     >
-      <div className="space-y-4">
+      <div className="space-y-3.5">
         <Input
-          placeholder="Type at least 2 characters to search messages & chats..."
+          placeholder="Search people, conversations, messages, moments, or feed posts…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           leftAddon={<Search className="h-4 w-4" />}
           autoFocus
         />
 
-        <div className="max-h-80 overflow-y-auto space-y-4 pr-1">
-          {!query.trim() ? (
-            <p className="py-8 text-center text-xs text-zinc-500">
-              Search by conversation name, @handle, or message text.
-            </p>
+        <div className="overflow-x-auto pb-1">
+          <SegmentedControl<SearchCategory>
+            ariaLabel="Search categories"
+            value={category}
+            onChange={setCategory}
+            options={[
+              { id: "all", label: "All", badge: totalMatches },
+              { id: "users", label: "People", badge: data.users.length },
+              { id: "chats", label: "Chats", badge: data.conversations.length },
+              { id: "groups", label: "Groups", badge: data.groups.length },
+              { id: "messages", label: "Messages", badge: data.messages.length },
+              { id: "moments", label: "Moments", badge: data.moments.length },
+              { id: "posts", label: "Feed", badge: data.posts.length },
+            ]}
+          />
+        </div>
+
+        {error && (
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3.5 py-2.5 text-xs text-red-300">
+            {error}
+          </div>
+        )}
+
+        <div className="max-h-[420px] overflow-y-auto space-y-4 pr-1">
+          {trimmed.length < 2 ? (
+            <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-canvas)] py-10 px-4 text-center text-xs text-[var(--text-muted)]">
+              Type at least 2 characters to search across your authorized
+              workspace.
+            </div>
+          ) : loading ? (
+            <div className="flex items-center justify-center py-10 text-xs text-[var(--text-muted)] gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Searching workspace…
+            </div>
+          ) : totalMatches === 0 ? (
+            <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-canvas)] py-10 px-4 text-center text-xs text-[var(--text-muted)]">
+              No authorized matches found for &ldquo;{trimmed}&rdquo;.
+            </div>
           ) : (
             <>
-              {matchingConvs.length > 0 && (
-                <div className="space-y-1.5">
-                  <p className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 px-1">
-                    Conversations
+              {/* Direct Chats */}
+              {showSection("chats") && data.conversations.length > 0 && (
+                <section className="space-y-1.5">
+                  <p className="px-1 font-mono text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
+                    Direct Conversations
                   </p>
-                  {matchingConvs.slice(0, 6).map((c) => (
+                  {data.conversations.map((c) => (
                     <button
                       key={c.conversation.id}
                       type="button"
@@ -529,46 +613,117 @@ function GlobalSearchModal() {
                         setActiveModal(null);
                         router.push(`/app/chats/${c.conversation.id}`);
                       }}
-                      className="flex w-full items-center gap-3 rounded-xl border border-white/[0.06] bg-[var(--bg-canvas)] p-2.5 text-left hover:border-white/20 transition-colors cursor-pointer"
+                      className="flex w-full items-center gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-canvas)] p-2.5 text-left hover:border-[var(--border-strong)] transition-colors cursor-pointer"
                     >
                       <Avatar
                         name={c.displayTitle}
                         avatarPath={c.displayAvatarPath}
                         size="sm"
-                        isGroup={c.conversation.type === "group"}
                       />
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs font-medium text-white truncate">
+                        <p className="truncate text-xs font-medium text-[var(--text-primary)]">
                           {c.displayTitle}
                         </p>
-                        <p className="text-[11px] text-zinc-500 truncate">
+                        <p className="truncate text-[11px] text-[var(--text-muted)]">
                           {c.displaySubtitle}
                         </p>
                       </div>
                     </button>
                   ))}
-                </div>
+                </section>
               )}
 
-              <div className="space-y-1.5">
-                <p className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 px-1">
-                  Messages
-                </p>
-                {loading ? (
-                  <div className="flex items-center justify-center py-6 text-xs text-zinc-500 gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Searching messages...
-                  </div>
-                ) : query.trim().length < 2 ? (
-                  <p className="px-1 py-3 text-xs text-zinc-500">
-                    Enter at least 2 characters to search message contents.
+              {/* Groups */}
+              {showSection("groups") && data.groups.length > 0 && (
+                <section className="space-y-1.5">
+                  <p className="px-1 font-mono text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
+                    Groups
                   </p>
-                ) : messages.length === 0 ? (
-                  <p className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 text-center text-xs text-zinc-500">
-                    No messages matched &ldquo;{query.trim()}&rdquo;.
+                  {data.groups.map((g) => (
+                    <button
+                      key={g.conversation.id}
+                      type="button"
+                      onClick={() => {
+                        setActiveModal(null);
+                        router.push(`/app/chats/${g.conversation.id}`);
+                      }}
+                      className="flex w-full items-center gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-canvas)] p-2.5 text-left hover:border-[var(--border-strong)] transition-colors cursor-pointer"
+                    >
+                      <Avatar
+                        name={g.displayTitle}
+                        avatarPath={g.displayAvatarPath}
+                        size="sm"
+                        isGroup
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-medium text-[var(--text-primary)]">
+                          {g.displayTitle}
+                        </p>
+                        <p className="truncate text-[11px] text-[var(--text-muted)]">
+                          {g.displaySubtitle}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </section>
+              )}
+
+              {/* People */}
+              {showSection("users") && data.users.length > 0 && (
+                <section className="space-y-1.5">
+                  <p className="px-1 font-mono text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
+                    People Directory
                   </p>
-                ) : (
-                  messages.map((m) => (
+                  {data.users.map((u) => (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onClick={async () => {
+                        if (
+                          u.allow_direct_messages === "none" ||
+                          u.is_blocked_by_me
+                        ) {
+                          setActiveModal(null);
+                          router.push("/app/contacts");
+                          return;
+                        }
+                        const convId = await startDirectConversation(u.id);
+                        setActiveModal(null);
+                        if (convId) router.push(`/app/chats/${convId}`);
+                      }}
+                      className="flex w-full items-center gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-canvas)] p-2.5 text-left hover:border-[var(--border-strong)] transition-colors cursor-pointer"
+                    >
+                      <Avatar
+                        name={u.display_name}
+                        avatarPath={u.avatar_url}
+                        size="sm"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-medium text-[var(--text-primary)]">
+                          {u.display_name}
+                        </p>
+                        <p className="truncate font-mono text-[11px] text-[var(--text-muted)]">
+                          @{u.username}
+                          {u.status_text ? ` · ${u.status_text}` : ""}
+                        </p>
+                      </div>
+                      <Badge variant="neutral" size="sm">
+                        {u.allow_direct_messages === "none"
+                          ? "View"
+                          : "Message"}
+                      </Badge>
+                    </button>
+                  ))}
+                </section>
+              )}
+
+              {/* Messages */}
+              {showSection("messages") && data.messages.length > 0 && (
+                <section className="space-y-1.5">
+                  <p className="px-1 font-mono text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
+                    Messages
+                  </p>
+                  {data.messages.map((m) => (
                     <button
                       key={m.message_id}
                       type="button"
@@ -578,31 +733,276 @@ function GlobalSearchModal() {
                           `/app/chats/${m.conversation_id}?highlight=${m.message_id}`
                         );
                       }}
-                      className="flex w-full items-start gap-3 rounded-xl border border-white/[0.06] bg-[var(--bg-canvas)] p-3 text-left hover:border-white/20 transition-colors cursor-pointer"
+                      className="flex w-full items-start gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-canvas)] p-3 text-left hover:border-[var(--border-strong)] transition-colors cursor-pointer"
                     >
-                      <MessageSquare className="h-4 w-4 text-zinc-400 mt-0.5 shrink-0" />
+                      <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-[var(--accent-primary)]" />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs font-semibold text-white truncate">
+                          <span className="truncate text-xs font-semibold text-[var(--text-primary)]">
                             {m.conversation_name || "Conversation"}
                           </span>
-                          <span className="font-mono text-[10px] text-zinc-500 shrink-0">
+                          <span className="shrink-0 font-mono text-[10px] text-[var(--text-muted)]">
                             {formatShortTime(m.created_at)}
                           </span>
                         </div>
-                        <p className="mt-0.5 text-xs text-zinc-300 line-clamp-2">
-                          <span className="text-zinc-500">
+                        <p className="mt-0.5 line-clamp-2 text-xs text-[var(--text-secondary)]">
+                          <span className="text-[var(--text-muted)]">
                             {m.sender_display_name || "Member"}:{" "}
                           </span>
                           {m.body}
                         </p>
                       </div>
                     </button>
-                  ))
-                )}
-              </div>
+                  ))}
+                </section>
+              )}
+
+              {/* Moments */}
+              {showSection("moments") && data.moments.length > 0 && (
+                <section className="space-y-1.5">
+                  <p className="px-1 font-mono text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
+                    Active Moments
+                  </p>
+                  {data.moments.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => {
+                        setActiveModal(null);
+                        router.push("/app/moments");
+                      }}
+                      className="flex w-full items-start gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-canvas)] p-3 text-left hover:border-[var(--border-strong)] transition-colors cursor-pointer"
+                    >
+                      <Flame className="mt-0.5 h-4 w-4 shrink-0 text-[var(--accent-primary)]" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="truncate text-xs font-semibold text-[var(--text-primary)]">
+                            {m.author_display_name} (@{m.author_username})
+                          </span>
+                          <span className="shrink-0 font-mono text-[10px] text-[var(--text-muted)]">
+                            {formatShortTime(m.created_at)}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 line-clamp-2 text-xs text-[var(--text-secondary)]">
+                          {m.caption || "Shared a media Moment"}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </section>
+              )}
+
+              {/* Feed Posts */}
+              {showSection("posts") && data.posts.length > 0 && (
+                <section className="space-y-1.5">
+                  <p className="px-1 font-mono text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
+                    Community Feed
+                  </p>
+                  {data.posts.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => {
+                        setActiveModal(null);
+                        router.push("/app/feed");
+                      }}
+                      className="flex w-full items-start gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-canvas)] p-3 text-left hover:border-[var(--border-strong)] transition-colors cursor-pointer"
+                    >
+                      <Compass className="mt-0.5 h-4 w-4 shrink-0 text-[var(--accent-primary)]" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="truncate text-xs font-semibold text-[var(--text-primary)]">
+                            {p.author_display_name} (@{p.author_username})
+                          </span>
+                          <span className="shrink-0 font-mono text-[10px] text-[var(--text-muted)]">
+                            {formatShortTime(p.created_at)}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 line-clamp-2 text-xs text-[var(--text-secondary)]">
+                          {p.body}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </section>
+              )}
             </>
           )}
+        </div>
+      </div>
+    </Dialog>
+  );
+}
+
+function ForwardMessageModal() {
+  const router = useRouter();
+  const {
+    forwardingMessage,
+    setForwardingMessage,
+    conversations,
+    refreshConversations,
+  } = useWorkspace();
+  const { pushToast } = useToast();
+
+  const [filter, setFilter] = useState("");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [forwarding, setForwarding] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!forwardingMessage) return null;
+
+  const availableConversations = conversations.filter((c) => {
+    if (c.membership.left_at) return false;
+    const q = filter.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      c.displayTitle.toLowerCase().includes(q) ||
+      c.displaySubtitle.toLowerCase().includes(q)
+    );
+  });
+
+  const toggleTarget = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id)
+        ? prev.filter((item) => item !== id)
+        : prev.length >= 10
+          ? prev
+          : [...prev, id]
+    );
+  };
+
+  const handleForward = async () => {
+    if (selectedIds.length === 0) return;
+    setForwarding(true);
+    setError(null);
+    try {
+      await messagesService.forwardMessage(forwardingMessage.id, selectedIds);
+      await refreshConversations();
+      setForwardingMessage(null);
+      pushToast({
+        title:
+          selectedIds.length === 1
+            ? "Message forwarded"
+            : `Forwarded to ${selectedIds.length} conversations`,
+        variant: "success",
+      });
+      if (selectedIds.length === 1) {
+        router.push(`/app/chats/${selectedIds[0]}`);
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Unable to forward message."
+      );
+    } finally {
+      setForwarding(false);
+    }
+  };
+
+  return (
+    <Dialog
+      open
+      onClose={() => setForwardingMessage(null)}
+      title="Forward message"
+      description="Select up to 10 conversations you belong to."
+    >
+      <div className="space-y-4">
+        <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-canvas)] p-3">
+          <div className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--accent-primary)]">
+            <CornerUpRight className="h-3.5 w-3.5" />
+            <span>
+              From{" "}
+              {forwardingMessage.senderProfile?.display_name || "Conversation"}
+            </span>
+          </div>
+          <p className="mt-1 line-clamp-3 text-xs text-[var(--text-secondary)]">
+            {forwardingMessage.body.trim() || "Attachment message"}
+          </p>
+        </div>
+
+        {error && (
+          <div className="rounded-xl border border-red-500/35 bg-red-500/10 px-3.5 py-2.5 text-xs text-red-300">
+            {error}
+          </div>
+        )}
+
+        <Input
+          placeholder="Filter destination chats or groups…"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          leftAddon={<Search className="h-4 w-4" />}
+          autoFocus
+        />
+
+        <div className="max-h-60 overflow-y-auto space-y-1 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-canvas)] p-2">
+          {availableConversations.length === 0 ? (
+            <p className="py-6 text-center text-xs text-[var(--text-muted)]">
+              No matching conversations.
+            </p>
+          ) : (
+            availableConversations.map((c) => {
+              const selected = selectedIds.includes(c.conversation.id);
+              return (
+                <button
+                  key={c.conversation.id}
+                  type="button"
+                  onClick={() => toggleTarget(c.conversation.id)}
+                  className="flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-left hover:bg-white/[0.05] transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Avatar
+                      name={c.displayTitle}
+                      avatarPath={c.displayAvatarPath}
+                      size="sm"
+                      isGroup={c.conversation.type === "group"}
+                    />
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-medium text-[var(--text-primary)]">
+                        {c.displayTitle}
+                      </p>
+                      <p className="truncate text-[11px] text-[var(--text-muted)]">
+                        {c.displaySubtitle}
+                      </p>
+                    </div>
+                  </div>
+                  <div
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${
+                      selected
+                        ? "border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--accent-primary-fg)]"
+                        : "border-white/20"
+                    }`}
+                  >
+                    {selected && <Check className="h-3.5 w-3.5" />}
+                  </div>
+                </button>
+              );
+            })
+          )}
+        </div>
+
+        <div className="flex items-center justify-between gap-2 pt-1">
+          <span className="text-xs text-[var(--text-muted)]">
+            {selectedIds.length} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setForwardingMessage(null)}
+              disabled={forwarding}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={selectedIds.length === 0}
+              loading={forwarding}
+              onClick={handleForward}
+            >
+              <CornerUpRight className="h-3.5 w-3.5" />
+              Forward
+            </Button>
+          </div>
         </div>
       </div>
     </Dialog>
@@ -659,7 +1059,9 @@ function ReportModal() {
         )}
 
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-zinc-300">Reason</label>
+          <label className="text-xs font-medium text-[var(--text-secondary)]">
+            Reason
+          </label>
           <div className="grid grid-cols-2 gap-2">
             {(
               [
@@ -676,8 +1078,8 @@ function ReportModal() {
                 onClick={() => setCategory(val)}
                 className={`rounded-xl border px-3 py-2 text-xs text-left transition-colors cursor-pointer ${
                   category === val
-                    ? "border-white bg-white text-zinc-950 font-medium"
-                    : "border-white/10 bg-[var(--bg-canvas)] text-zinc-300 hover:border-white/25"
+                    ? "border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--accent-primary-fg)] font-medium"
+                    : "border-[var(--border-subtle)] bg-[var(--bg-canvas)] text-[var(--text-secondary)] hover:border-[var(--border-strong)]"
                 }`}
               >
                 {label}
@@ -688,7 +1090,7 @@ function ReportModal() {
 
         <Textarea
           label="Additional context (optional)"
-          placeholder="Provide any relevant details..."
+          placeholder="Provide any relevant details…"
           value={details}
           onChange={(e) => setDetails(e.target.value)}
           maxLength={1000}

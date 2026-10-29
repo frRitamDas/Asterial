@@ -11,13 +11,16 @@ import React, {
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
+import { resolveAppearanceTheme, type CloseOrbitContactItem, type CloseOrbitTier } from "@asterial/core";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { primeAvatarSignedUrls } from "@/lib/supabase/storage";
+import { authService, orbitsService } from "@/lib/services";
 import { useToast } from "@/components/ui/Toast";
 import type {
   ConversationMemberRow,
   ConversationRow,
   ConversationSummary,
+  EnrichedMessage,
   NotificationPreferences,
   Profile,
   ReportCategory,
@@ -58,12 +61,25 @@ interface WorkspaceContextValue {
   totalUnreadCount: number;
   activeModal: "new-dm" | "new-group" | "search" | null;
   reportTarget: WorkspaceReportTarget | null;
+  forwardingMessage: EnrichedMessage | null;
+  closeOrbitItems: CloseOrbitContactItem[];
+  closeOrbitMap: Map<string, CloseOrbitContactItem>;
+  drafts: Record<string, string>;
   setActiveModal: (modal: "new-dm" | "new-group" | "search" | null) => void;
+  setForwardingMessage: (message: EnrichedMessage | null) => void;
+  setDraft: (conversationId: string, body: string) => void;
   openReportModal: (target: WorkspaceReportTarget) => void;
   closeReportModal: () => void;
   refreshProfile: () => Promise<void>;
   refreshConversations: () => Promise<void>;
   refreshBlocks: () => Promise<void>;
+  refreshCloseOrbit: () => Promise<void>;
+  upsertCloseOrbit: (
+    contactId: string,
+    tier?: CloseOrbitTier,
+    note?: string
+  ) => Promise<boolean>;
+  removeCloseOrbit: (contactId: string) => Promise<boolean>;
   updatePreferences: (
     patch: Partial<Omit<NotificationPreferences, "user_id" | "updated_at">>
   ) => Promise<void>;
@@ -80,6 +96,7 @@ interface WorkspaceContextValue {
   isBlockedByMe: (targetUserId: string) => boolean;
   submitReport: (payload: ReportPayload) => Promise<boolean>;
   signOut: () => Promise<void>;
+  signOutAllDevices: () => Promise<void>;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
@@ -140,6 +157,62 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const [reportTarget, setReportTarget] = useState<WorkspaceReportTarget | null>(
     null
   );
+  const [forwardingMessage, setForwardingMessage] =
+    useState<EnrichedMessage | null>(null);
+  const [closeOrbitItems, setCloseOrbitItems] = useState<
+    CloseOrbitContactItem[]
+  >([]);
+  const [draftsState, setDraftsState] = useState<{
+    uid: string | null;
+    map: Record<string, string>;
+  }>({ uid: null, map: {} });
+
+  const drafts = useMemo(() => {
+    if (!userId) return {};
+    if (draftsState.uid === userId) return draftsState.map;
+    if (typeof window === "undefined") return {};
+    try {
+      const raw = window.localStorage.getItem(`asterial_drafts_v1:${userId}`);
+      return raw ? (JSON.parse(raw) as Record<string, string>) : {};
+    } catch {
+      return {};
+    }
+  }, [draftsState, userId]);
+
+  const setDraft = useCallback(
+    (conversationId: string, body: string) => {
+      if (!userId) return;
+      setDraftsState((prev) => {
+        let base = prev.uid === userId ? prev.map : {};
+        if (prev.uid !== userId && typeof window !== "undefined") {
+          try {
+            const raw = window.localStorage.getItem(
+              `asterial_drafts_v1:${userId}`
+            );
+            base = raw ? (JSON.parse(raw) as Record<string, string>) : {};
+          } catch {
+            base = {};
+          }
+        }
+        const next = { ...base };
+        if (body.trim().length > 0) {
+          next[conversationId] = body;
+        } else {
+          delete next[conversationId];
+        }
+        try {
+          window.localStorage.setItem(
+            `asterial_drafts_v1:${userId}`,
+            JSON.stringify(next)
+          );
+        } catch {
+          // Ignore storage quota errors
+        }
+        return { uid: userId, map: next };
+      });
+    },
+    [userId]
+  );
 
   const prefsRef = useRef<NotificationPreferences | null>(null);
   const convsRef = useRef<ConversationSummary[]>([]);
@@ -158,22 +231,52 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     pathnameRef.current = pathname;
   }, [pathname]);
 
-  // Apply appearance & motion tokens to documentElement
+  // Apply appearance, accent, wallpaper & motion tokens to documentElement
   useEffect(() => {
     if (!preferences) return;
     const root = document.documentElement;
-    const theme = preferences.appearance_theme || "obsidian";
-    root.setAttribute("data-theme", theme);
-    root.classList.toggle("dark", theme !== "alabaster");
-    root.setAttribute(
-      "data-density",
-      preferences.message_density || "comfortable"
-    );
-    root.setAttribute(
-      "data-reduced-motion",
-      preferences.reduced_motion ? "true" : "false"
-    );
+    const media = window.matchMedia("(prefers-color-scheme: light)");
+
+    const applyTheme = () => {
+      const resolved = resolveAppearanceTheme(
+        preferences.appearance_theme,
+        media.matches
+      );
+      root.setAttribute("data-theme", resolved);
+      root.classList.toggle("dark", resolved !== "alabaster");
+      root.setAttribute(
+        "data-accent",
+        preferences.accent_color || "indigo"
+      );
+      root.setAttribute(
+        "data-wallpaper",
+        preferences.chat_wallpaper || "constellation"
+      );
+      root.setAttribute(
+        "data-density",
+        preferences.message_density || "comfortable"
+      );
+      root.setAttribute(
+        "data-reduced-motion",
+        preferences.reduced_motion ? "true" : "false"
+      );
+    };
+
+    applyTheme();
+    if (preferences.appearance_theme === "system") {
+      media.addEventListener("change", applyTheme);
+      return () => media.removeEventListener("change", applyTheme);
+    }
   }, [preferences]);
+
+  const fetchCloseOrbit = useCallback(async () => {
+    try {
+      const items = await orbitsService.fetchMyCloseOrbit();
+      setCloseOrbitItems(items);
+    } catch {
+      // Keep prior Close Orbit snapshot if offline
+    }
+  }, []);
 
   const fetchProfileAndPrefs = useCallback(async (uid: string) => {
     const supabase = getSupabaseBrowserClient();
@@ -409,6 +512,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
           fetchProfileAndPrefs(authUser.id),
           fetchConversations(authUser.id),
           fetchBlocks(authUser.id),
+          fetchCloseOrbit(),
         ]);
         // Acknowledge delivery of any pending incoming messages
         void supabase.rpc("acknowledge_delivery", { p_conversation_id: null });
@@ -442,7 +546,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         window.clearTimeout(refreshTimerRef.current);
       }
     };
-  }, [fetchBlocks, fetchConversations, fetchProfileAndPrefs, router]);
+  }, [fetchBlocks, fetchCloseOrbit, fetchConversations, fetchProfileAndPrefs, router]);
 
   // Network online/offline listeners + automatic catch-up on reconnect
   useEffect(() => {
@@ -703,6 +807,71 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const refreshBlocks = useCallback(async () => {
     if (userId) await fetchBlocks(userId);
   }, [fetchBlocks, userId]);
+
+  const refreshCloseOrbit = useCallback(async () => {
+    if (userId) await fetchCloseOrbit();
+  }, [fetchCloseOrbit, userId]);
+
+  const upsertCloseOrbit = useCallback(
+    async (
+      contactId: string,
+      tier: CloseOrbitTier = "inner",
+      note = ""
+    ): Promise<boolean> => {
+      if (!userId) return false;
+      try {
+        await orbitsService.upsertCloseOrbitContact({ contactId, tier, note });
+        await fetchCloseOrbit();
+        pushToast({
+          title:
+            tier === "inner"
+              ? "Added to Inner Orbit"
+              : "Added to Priority Orbit",
+          description: "Visible only to you under private Orbit rules.",
+          variant: "success",
+        });
+        return true;
+      } catch (err) {
+        pushToast({
+          title: "Could not update Close Orbit",
+          description: err instanceof Error ? err.message : "Please try again.",
+          variant: "error",
+        });
+        return false;
+      }
+    },
+    [fetchCloseOrbit, pushToast, userId]
+  );
+
+  const removeCloseOrbit = useCallback(
+    async (contactId: string): Promise<boolean> => {
+      if (!userId) return false;
+      try {
+        await orbitsService.removeCloseOrbitContact(contactId);
+        setCloseOrbitItems((prev) =>
+          prev.filter((item) => item.contact_id !== contactId)
+        );
+        pushToast({
+          title: "Removed from Close Orbit",
+          variant: "success",
+        });
+        return true;
+      } catch (err) {
+        pushToast({
+          title: "Could not remove from Close Orbit",
+          description: err instanceof Error ? err.message : "Please try again.",
+          variant: "error",
+        });
+        return false;
+      }
+    },
+    [pushToast, userId]
+  );
+
+  const closeOrbitMap = useMemo(
+    () => new Map(closeOrbitItems.map((c) => [c.contact_id, c])),
+    [closeOrbitItems]
+  );
 
   const updatePreferences = useCallback(
     async (
@@ -986,10 +1155,28 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: "local" });
     router.replace("/login");
     router.refresh();
   }, [router]);
+
+  const signOutAllDevices = useCallback(async () => {
+    try {
+      await authService.signOut("global");
+      pushToast({
+        title: "Signed out of all devices",
+        variant: "success",
+      });
+      router.replace("/login");
+      router.refresh();
+    } catch (err) {
+      pushToast({
+        title: "Could not revoke all sessions",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "error",
+      });
+    }
+  }, [pushToast, router]);
 
   const totalUnreadCount = useMemo(
     () =>
@@ -1013,12 +1200,21 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       totalUnreadCount,
       activeModal,
       reportTarget,
+      forwardingMessage,
+      closeOrbitItems,
+      closeOrbitMap,
+      drafts,
       setActiveModal,
+      setForwardingMessage,
+      setDraft,
       openReportModal: setReportTarget,
       closeReportModal: () => setReportTarget(null),
       refreshProfile,
       refreshConversations,
       refreshBlocks,
+      refreshCloseOrbit,
+      upsertCloseOrbit,
+      removeCloseOrbit,
       updatePreferences,
       togglePin,
       toggleMute,
@@ -1030,13 +1226,18 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       isBlockedByMe,
       submitReport,
       signOut,
+      signOutAllDevices,
     }),
     [
       activeModal,
       blockUser,
       blockedProfiles,
       blocks,
+      closeOrbitItems,
+      closeOrbitMap,
       conversations,
+      drafts,
+      forwardingMessage,
       isBlockedByMe,
       isNetworkOnline,
       loadingInitial,
@@ -1045,10 +1246,14 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       preferences,
       profile,
       refreshBlocks,
+      refreshCloseOrbit,
       refreshConversations,
       refreshProfile,
+      removeCloseOrbit,
       reportTarget,
+      setDraft,
       signOut,
+      signOutAllDevices,
       startDirectConversation,
       submitReport,
       toggleArchive,
@@ -1057,6 +1262,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       totalUnreadCount,
       unblockUser,
       updatePreferences,
+      upsertCloseOrbit,
       user,
     ]
   );

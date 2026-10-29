@@ -50,7 +50,7 @@ export function FeedScreen({
     showToast,
   } = useMobileWorkspace();
 
-  const [tab, setTab] = useState<"all" | "contacts" | "mine">("all");
+  const [tab, setTab] = useState<"all" | "contacts" | "orbit" | "mine">("all");
   const [posts, setPosts] = useState<FeedPostItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -76,7 +76,8 @@ export function FeedScreen({
   const loadFeed = useCallback(
     async (cursor?: { createdAt: string; id: string }) => {
       if (!supabase || !user) return;
-      const scope: FeedScope = tab === "contacts" ? "contacts" : "all";
+      const scope: FeedScope =
+        tab === "contacts" ? "contacts" : tab === "orbit" ? "orbit" : "all";
       const authorFilter = tab === "mine" ? user.id : null;
 
       const { data, error } = await supabase.rpc("get_feed_posts_page", {
@@ -432,7 +433,13 @@ export function FeedScreen({
 
                 <Pressable
                   onPress={() =>
-                    setDraftVis((v) => (v === "public" ? "contacts" : "public"))
+                    setDraftVis((v) =>
+                      v === "public"
+                        ? "contacts"
+                        : v === "contacts"
+                          ? "orbit"
+                          : "public"
+                    )
                   }
                   style={[
                     styles.metaBtn,
@@ -449,7 +456,11 @@ export function FeedScreen({
                       fontWeight: "700",
                     }}
                   >
-                    {draftVis === "public" ? "Public" : "Contacts"}
+                    {draftVis === "public"
+                      ? "Public"
+                      : draftVis === "contacts"
+                        ? "Contacts"
+                        : "Close Orbit"}
                   </Text>
                 </Pressable>
 
@@ -492,9 +503,10 @@ export function FeedScreen({
             >
               {(
                 [
-                  ["all", "All Posts"],
+                  ["all", "All"],
                   ["contacts", "Contacts"],
-                  ["mine", "My Posts"],
+                  ["orbit", "Orbit"],
+                  ["mine", "Mine"],
                 ] as const
               ).map(([val, label]) => (
                 <Pressable

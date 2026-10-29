@@ -1,6 +1,18 @@
 export type PresenceVisibility = "everyone" | "contacts" | "nobody";
 export type AllowDirectMessages = "everyone" | "none";
-export type AppearanceTheme = "obsidian" | "pitch" | "graphite" | "alabaster";
+export type ResolvedAppearanceTheme =
+  | "obsidian"
+  | "pitch"
+  | "graphite"
+  | "alabaster";
+export type AppearanceTheme = ResolvedAppearanceTheme | "system";
+export type AccentColor =
+  | "indigo"
+  | "cobalt"
+  | "emerald"
+  | "amber"
+  | "monochrome";
+export type ChatWallpaper = "none" | "constellation" | "grid" | "aurora";
 export type MessageDensity = "compact" | "comfortable";
 export type ConversationType = "direct" | "group";
 export type MemberRole = "owner" | "admin" | "member";
@@ -40,6 +52,8 @@ export interface NotificationPreferences {
   dm_notifications: boolean;
   group_notifications: boolean;
   appearance_theme: AppearanceTheme;
+  accent_color?: AccentColor;
+  chat_wallpaper?: ChatWallpaper;
   message_density: MessageDensity;
   reduced_motion: boolean;
   updated_at: string;
@@ -89,6 +103,9 @@ export interface MessageRow {
   has_attachments: boolean;
   edited_at: string | null;
   deleted_at: string | null;
+  pinned_at?: string | null;
+  pinned_by?: string | null;
+  forwarded_from_id?: string | null;
   metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;

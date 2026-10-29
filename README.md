@@ -1,36 +1,35 @@
-# ASTERIAL — v1.4.0
+# ASTERIAL — v1.4.5
 
-**Full-stack monochrome real-time messaging, Orbits, Moments & Social Feed across Web & Native Android.**  
+**Messaging-first real-time communication, Close-Connections Orbits, Community Spaces, Moments & Community Feed across Web & Native Android.**  
 **Official Developer:** Ritam Das · **Attribution:** By X Huracan  
 **Production Website:** [https://asterial.vercel.app](https://asterial.vercel.app) · **Android Package:** `com.xhuracan.asterial`
 
 ---
 
-## 1. Two-Product Architecture Overview
+## 1. Platform Architecture Overview
 
-ASTERIAL delivers **two separate client applications** backed by **one shared Supabase PostgreSQL 17 backend** and **one shared TypeScript domain package (`@asterial/core`)**:
+ASTERIAL delivers **two dedicated client applications** backed by **one shared Supabase PostgreSQL 17 backend**, **one shared TypeScript domain package (`@asterial/core`)**, and a clean **typed domain service layer (`src/lib/services/`)**:
 
 | Product / Layer | Stack & Role |
 | :--- | :--- |
-| **Web Application (`/`)** | Next.js 16.4.3 (App Router), React 19.3, TypeScript 5.9 (`strict: true`), Tailwind CSS 4 — deployed on Vercel (`https://asterial.vercel.app`) |
+| **Web Application (`/`)** | Next.js 16.4.3 (App Router), React 19.3, TypeScript 5.9 (`strict: true`), Tailwind CSS 4 — responsive 3-pane desktop & mobile bottom-navigation workspace deployed on Vercel (`https://asterial.vercel.app`) |
+| **Typed Service Layer (`src/lib/services/`)** | Domain-separated modules (`auth`, `media`, `conversations`, `messages`, `groups`, `contacts`, `orbits`, `moments`, `feed`, `search`, `settings`, `errors`) keeping UI components declarative and error handling honest |
 | **Native Android App (`mobile/`)** | Dedicated **React Native 0.83.10** + TypeScript (`com.xhuracan.asterial`), Fabric New Architecture + Hermes engine, Kotlin 2.1.20 (`AsterialNativeModule`), Gradle 9.0, Android SDK 36 (`minSdk 26`) — **100% native UI, zero WebView or website wrapper** |
-| **Shared Core (`packages/core/`)** | `@asterial/core` — monochrome v1.4.0 theme palettes (`obsidian`, `pitch`, `graphite`, `alabaster`), Supabase DB & social contracts, auth config & error classification (`classifyAuthError`), Zod v4 validation schemas, auth deep-link parser, read-receipt privacy, binary header verification, and semver utilities |
-| **Database & Authorization** | Supabase PostgreSQL 17 with Row Level Security (RLS) enforced across all **21** `public` tables (`0` tables without RLS) + 30 `SECURITY DEFINER` RPCs and server-side triggers |
-| **Realtime & Storage** | Supabase Realtime (`postgres_changes`, typing broadcast, presence) + private Storage buckets (`avatars` 5 MB, `chat-attachments` 15 MB, `social-media` 15 MB) via short-lived signed URLs |
-| **CI/CD & Releases** | Vercel auto-deploys Web; GitHub Actions (`.github/workflows/android-release.yml`) validates PRs/branches, preflights Supabase Auth TLS reachability, compiles & verifies standalone Universal + ABI-split (`arm64-v8a`, `armeabi-v7a`, `x86_64`) Hermes APKs, and publishes tag-driven (`v*.*.*`) GitHub Releases |
+| **Shared Core (`packages/core/`)** | `@asterial/core` — `v1.4.5` theme palettes (`obsidian`, `pitch`, `graphite`, `alabaster`, `system` + `resolveAppearanceTheme`), selective `ACCENT_PRESETS`, `CHAT_WALLPAPER_OPTIONS`, DB & social contracts, `classifyAuthError`, Zod v4 schemas, magic-byte file verification, and semver utilities |
+| **Database & Authorization** | Supabase PostgreSQL 17 with Row Level Security (RLS) enforced across all **22** `public` tables (`0` tables without RLS), strict trigger guards (`before_message_update_guard`), and `SECURITY DEFINER` RPCs with `SET search_path = public, pg_temp` |
+| **Realtime & Private Storage** | Supabase Realtime (`postgres_changes`, typing broadcast, privacy-aware presence) + 3 private Storage buckets (`avatars` 5 MB, `chat-attachments` 25 MB, `social-media` 25 MB) served exclusively via short-lived signed URLs |
+| **CI/CD & Releases** | Vercel deploys Web; GitHub Actions (`.github/workflows/android-release.yml`) runs typechecks/lint/tests, preflights Supabase Auth TLS reachability, compiles & verifies standalone Universal + ABI-split (`arm64-v8a`, `armeabi-v7a`, `x86_64`) Hermes APKs, and publishes tag-driven (`v*.*.*`) GitHub Releases |
 
-See [**`docs/ARCHITECTURE.md`**](./docs/ARCHITECTURE.md) for the complete system architecture and [**`docs/RELEASE.md`**](./docs/RELEASE.md) for the repeatable tag-driven Android release runbook.
+See [**`docs/ARCHITECTURE.md`**](./docs/ARCHITECTURE.md) for deep-dive system architecture and [**`docs/RELEASE.md`**](./docs/RELEASE.md) for the Android release runbook.
 
 ---
 
 ## 2. Centralized Versioning (`version.json`)
 
-All version and attribution metadata lives in [`version.json`](./version.json):
-- `version`: `"1.4.0"` (`displayVersion`: `"1.4.0"`)
-- `versionCode`: `14000` (CI computes `14000 + github.run_number` for strictly monotonic Android upgrades above all prior `130xx` builds)
+All version and attribution metadata is synchronized from [`version.json`](./version.json):
+- `version`: `"1.4.5"` (`displayVersion`: `"1.4.5"`)
+- `versionCode`: `14500` (CI computes monotonic Android `versionCode` offsets per workflow run)
 - `androidPackageId`: `"com.xhuracan.asterial"`
-
-Synchronize or verify alignment across `version.json`, `package.json`, `package-lock.json`, `packages/core/package.json`, `mobile/package.json`, `mobile/package-lock.json`, and `mobile/android/app/build.gradle`:
 
 ```bash
 npm run version:sync
@@ -39,35 +38,56 @@ npm run version:check
 
 ---
 
-## 3. What's New in v1.4.0
+## 3. Key Capabilities in v1.4.5
 
-- **Android Authentication Root-Cause Fix (`"Network request failed"`):** Hardened `scripts/prepare-mobile-env.mjs` (`--if-missing` & `--require-valid` + verified `/api/mobile-config` build-time bootstrap), decoupled `mobile:typecheck` from overwriting `runtimeEnv.generated.ts` with CI placeholders, added Android `network_security_config.xml` + `asterialResilientFetch` (with native Kotlin `HttpsURLConnection` fallback), upgraded session storage to Android `KeyStore` AES-256-GCM (`AsterialNativeModule.kt`), and added live TLS Auth connectivity diagnostics + categorized `classifyAuthError` messages.
-- **Complete Premium Monochrome UI/UX Overhaul:** Deep obsidian/OLED black/charcoal & crisp alabaster light surfaces across Web and React Native Android, high-contrast white/zinc typography, subtle hairline borders, zero excessive glassmorphism or decorative glow gimmicks, and full `reduced_motion` support.
-- **Orbits (Community Spaces):** Dedicated community backend (`orbits`, `orbit_members`, `orbit_channels`, `orbit_messages`) with public/private visibility, `owner` / `admin` / `member` server-enforced roles, multi-channel real-time messaging (`#general`, `#announcements`, custom channels), keyset cursor pagination, member moderation, and private attachments.
-- **Moments (Ephemeral Updates):** 6h / 12h / 24h / 48h text & image updates (`moments`, `moment_views`) with `everyone` or `contacts` audiences, monochrome tone cards, view tracking (`record_moment_view`), and server-enforced expiry in both PostgreSQL RLS (`expires_at > now()`) and private `social-media` signed URL policies.
-- **Social Feed:** Chronological persistent posts (`posts`, `post_likes`, `post_comments`) with composite `(created_at DESC, id DESC)` cursor pagination (`get_feed_posts_page`), atomic `toggle_post_like`, threaded comments, post editing & soft-deletion, block filtering, and abuse reporting.
+- **Obsidian Design System & Responsive Navigation:** Deep-charcoal matte surfaces (`#090A0C` canvas, `#101216` sidebar, `#171A20` elevated cards), selective accent presets (`indigo`, `cobalt`, `emerald`, `amber`, `monochrome`), subtle chat wallpapers (`constellation`, `grid`, `aurora`, `none`), OS-aware `system` theme mode, message density (`comfortable` / `compact`), `reduced_motion`, and 6 primary workspace destinations (`Chats`, `Orbits`, `Moments`, `Feed`, `Contacts`, `Settings`).
+- **Real-Time Messaging & Groups:** Ordered inbox (pins, mutes, archives, unread counters, live typing, `Draft:` indicators, Close Orbit badges); full conversation timeline (cursor pagination, date & `"Unread messages"` dividers, floating `"Latest"` jump button, honest `sending`/`sent`/`delivered`/`read`/`failed` states, replies, reactions, edit, soft-delete, multi-chat forwarding, server-enforced message pinning, in-chat search, `MediaRecorder` voice notes, and 25 MB image/video/audio/document attachments with progress/cancel/retry).
+- **Orbits (Close Connections + Community Spaces):** Primary private **Close Connections** experience (`public.close_orbits` with strict `owner_id = auth.uid()` RLS, `inner` / `priority` tiers, private relationship notes, live presence, unread badges, and Quick Chat) alongside multi-channel **Community Spaces** (`/app/orbits/[orbitId]`).
+- **Moments & Community Feed:** 6h–48h ephemeral photo, video (`MP4`/`WebM`), and tone-card Moments (`everyone`, `contacts`, or `orbit` audiences) with server-enforced expiration and viewer tracking; paginated Community Feed (`all`, `contacts`, `orbit`) with photo/video attachments, optimistic likes, post editing/deletion, and **threaded comment replies** (`parent_comment_id`).
+- **Unified Search (`⌘K`):** Debounced server-filtered search across Users, Active Chats, Groups, Messages, Moments, and Feed Posts — never exposing private email addresses or phone numbers.
+- **Privacy, Security & Account Portability:** Server-enforced presence/last-seen/read-receipt/DM controls, per-conversation mute manager, blocked-accounts manager, single-device or global (`Revoke all devices`) sign-out, portable **Account JSON Export**, and typed-confirmation permanent account deletion.
 
 ---
 
-## 4. Local Verification Commands
+## 4. Environment Variables
+
+Copy [`.env.example`](./.env.example) to `.env.local`:
+
+| Variable | Scope | Description |
+| :--- | :--- | :--- |
+| `NEXT_PUBLIC_SUPABASE_URL` | Public (Web & Mobile) | HTTPS Supabase project URL (`https://<project-ref>.supabase.co`) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public (Web & Mobile) | Public Supabase `anon` JWT or `sb_publishable_*` key (enforced by RLS) |
+| `NEXT_PUBLIC_APP_URL` | Public (Web) | Canonical web origin (`https://asterial.vercel.app`) for auth callbacks |
+| `SUPABASE_SERVICE_ROLE_KEY` | **Server-only** | Used strictly on the Next.js server where required; **never** exposed to browser or mobile bundles |
+| `ANDROID_APP_SHA256_CERT_FINGERPRINTS` | Optional (Server) | Comma-separated SHA-256 signing fingerprints served at `/.well-known/assetlinks.json` |
+
+---
+
+## 5. Local Development & Verification
 
 ```bash
-# Full cross-workspace verification & Next.js production build
+# Install dependencies across root Web/Core and native Android workspace
+npm ci
+npm --prefix mobile ci
+
+# Run version parity, Web + Core + Mobile TypeScript checks, ESLint, and all unit/security tests
 npm run check
+
+# Build production Next.js Web bundle
 npm run build
 
-# React Native Android strict config & Metro production bundle verification
+# Verify strict mobile config & Metro + Hermes bytecode bundle
 npm run mobile:env:strict
-npm --prefix mobile run bundle:verify
 ```
 
 ---
 
-## 5. Security, Privacy & Scope Honesty
+## 6. Security & Scope Transparency
 
-- **Transport & Database Authorization:** All traffic uses HTTPS/TLS and WSS. Every exposed `public` table (`21/21`) enforces PostgreSQL 17 Row Level Security (RLS), and private media (`avatars`, `chat-attachments`, `social-media`) uses short-lived signed URLs. `SUPABASE_SERVICE_ROLE_KEY` and `sb_secret_*` keys are strictly rejected from client/mobile bundles.
-- **Honest Cryptography & Retention Disclosure:** Client-side end-to-end encryption (E2EE) is **not** enabled in v1.4.0; messages and social content are protected by HTTPS/TLS in transit and PostgreSQL RLS at rest. Expired Moments are immediately blocked from API queries and signed Storage access (`expires_at > now()`), while underlying infrastructure backups follow standard database retention schedules.
+- **Transport, RLS & Private Storage:** All client-server traffic uses HTTPS/TLS and WSS. All **22** `public` tables enforce PostgreSQL 17 Row Level Security (`0` tables without RLS), and all 3 media buckets (`avatars`, `chat-attachments`, `social-media`) are private (`public = false`) with magic-byte upload validation and short-lived signed URLs.
+- **Honest Cryptography Disclosure:** Client-side end-to-end cryptographic encryption (E2EE) is **not** enabled in `v1.4.5`; messages, media, and social updates are protected in transit via TLS and governed at rest by PostgreSQL RLS and private storage policies.
+- **External Push Notification Scope:** Web notifications use the standard Browser `Notification` API when granted, and real-time in-app banners run over Supabase Realtime. Native background OS push delivery when the Android app process is terminated requires external Firebase Cloud Messaging (FCM) credentials, which are intentionally not fabricated.
 
 ---
 
-**ASTERIAL v1.4.0** · Official Developer: **Ritam Das** · **By X Huracan**
+**ASTERIAL v1.4.5** · Official Developer: **Ritam Das** · **By X Huracan**

@@ -311,7 +311,7 @@ export async function uploadSocialMediaFile(params: {
   userId: string;
   orbitId?: string;
   file: File;
-  kind?: "social-image" | "attachment";
+  kind?: "social-image" | "social-media" | "attachment";
   onProgress?: (percent: number) => void;
   signal?: AbortSignal;
 }): Promise<{
@@ -322,7 +322,8 @@ export async function uploadSocialMediaFile(params: {
   width: number | null;
   height: number | null;
 }> {
-  const validationKind = params.kind || (params.domain === "orbits" ? "attachment" : "social-image");
+  const validationKind =
+    params.kind || (params.domain === "orbits" ? "attachment" : "social-media");
   const validation = await validateUploadFile(params.file, validationKind);
   if (!validation.ok) {
     throw new Error(validation.error);

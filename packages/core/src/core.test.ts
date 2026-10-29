@@ -29,12 +29,12 @@ import {
   type ConversationSummary,
 } from "./index";
 
-describe("@asterial/core shared cross-platform domain package (v1.4.2)", () => {
-  it("exposes shared v1.4.2 brand metadata, honest security notice, and monochrome palettes", () => {
+describe("@asterial/core shared cross-platform domain package (v1.4.5)", () => {
+  it("exposes shared v1.4.5 brand metadata, honest security notice, and obsidian palettes", () => {
     assert.equal(ASTERIAL_BRAND.name, "ASTERIAL");
-    assert.equal(ASTERIAL_BRAND.version, "1.4.2");
-    assert.equal(ASTERIAL_BRAND.semver, "1.4.2");
-    assert.equal(ASTERIAL_BRAND.versionCode, 14200);
+    assert.equal(ASTERIAL_BRAND.version, "1.4.5");
+    assert.equal(ASTERIAL_BRAND.semver, "1.4.5");
+    assert.equal(ASTERIAL_BRAND.versionCode, 14500);
     assert.equal(ASTERIAL_BRAND.developer, "Ritam Das");
     assert.equal(ASTERIAL_BRAND.attribution, "By X Huracan");
     assert.equal(ASTERIAL_BRAND.androidPackageId, "com.xhuracan.asterial");
@@ -42,6 +42,9 @@ describe("@asterial/core shared cross-platform domain package (v1.4.2)", () => {
 
     assert.equal(THEME_PALETTES.obsidian.isDark, true);
     assert.equal(THEME_PALETTES.obsidian.bgVoid, "#050506");
+    assert.equal(THEME_PALETTES.obsidian.bgCanvas, "#090A0C");
+    assert.equal(THEME_PALETTES.obsidian.bgSurface, "#101216");
+    assert.equal(THEME_PALETTES.obsidian.bgElevated, "#171A20");
     assert.equal(THEME_PALETTES.pitch.bgVoid, "#000000");
     assert.equal(THEME_PALETTES.graphite.isDark, true);
     assert.equal(THEME_PALETTES.alabaster.isDark, false);

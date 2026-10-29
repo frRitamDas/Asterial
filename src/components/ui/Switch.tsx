@@ -3,9 +3,10 @@
 import React from "react";
 import { cn } from "@/lib/utils/cn";
 
-interface SwitchProps {
+export interface SwitchProps {
   checked: boolean;
-  onCheckedChange: (checked: boolean) => void;
+  onCheckedChange?: (checked: boolean) => void;
+  onChange?: (checked: boolean) => void;
   disabled?: boolean;
   label?: string;
   description?: string;
@@ -15,11 +16,17 @@ interface SwitchProps {
 export function Switch({
   checked,
   onCheckedChange,
+  onChange,
   disabled = false,
   label,
   description,
   id,
 }: SwitchProps) {
+  const trigger = (next: boolean) => {
+    onCheckedChange?.(next);
+    onChange?.(next);
+  };
+
   return (
     <div className="flex items-start justify-between gap-4">
       {(label || description) && (
@@ -27,13 +34,16 @@ export function Switch({
           {label && (
             <label
               htmlFor={id}
-              className="text-sm font-medium text-[var(--text-primary)] cursor-pointer"
+              onClick={() => {
+                if (!disabled) trigger(!checked);
+              }}
+              className="text-xs font-medium text-[var(--text-primary)] cursor-pointer"
             >
               {label}
             </label>
           )}
           {description && (
-            <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+            <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
               {description}
             </p>
           )}
@@ -45,11 +55,11 @@ export function Switch({
         role="switch"
         aria-checked={checked}
         disabled={disabled}
-        onClick={() => onCheckedChange(!checked)}
+        onClick={() => trigger(!checked)}
         className={cn(
           "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors duration-150 cursor-pointer disabled:opacity-50 disabled:pointer-events-none",
           checked
-            ? "bg-white border-white"
+            ? "bg-[var(--accent-primary)] border-[var(--accent-primary)]"
             : "bg-[var(--bg-subtle)] border-[var(--border-strong)]"
         )}
       >
@@ -57,7 +67,7 @@ export function Switch({
           className={cn(
             "inline-block h-4 w-4 rounded-full transition-transform duration-150",
             checked
-              ? "translate-x-5.5 bg-zinc-950"
+              ? "translate-x-5.5 bg-[var(--accent-primary-fg)]"
               : "translate-x-1 bg-zinc-400"
           )}
         />

@@ -2,68 +2,65 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Aperture,
   ChevronLeft,
   ChevronRight,
   Clock,
   Eye,
+  Film,
+  Flame,
   Flag,
+  Globe,
   ImagePlus,
+  Orbit,
   Plus,
   RefreshCw,
   Trash2,
   Users,
   X,
 } from "lucide-react";
-import type {
-  ActiveMomentItem,
-  MomentAudience,
-  MomentDurationHours,
-  MomentTone,
+import {
+  formatMomentTimeRemaining,
+  momentCreateSchema,
+  type ActiveMomentItem,
+  type MomentAudience,
+  type MomentDurationHours,
+  type MomentTone,
 } from "@asterial/core";
-import { formatMomentTimeRemaining, momentCreateSchema } from "@asterial/core";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
-  primeAvatarSignedUrls,
-  primeBucketSignedUrls,
-  uploadSocialMediaFile,
-} from "@/lib/supabase/storage";
+  mediaService,
+  momentsService,
+  type MomentViewerDetail,
+} from "@/lib/services";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
 import { Avatar } from "@/components/ui/Avatar";
+import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { ErrorState } from "@/components/ui/ErrorState";
 import { Textarea } from "@/components/ui/Input";
-import { PrivateMediaImage } from "@/components/ui/PrivateMediaImage";
+import { PrivateMediaAsset } from "@/components/ui/PrivateMediaImage";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useToast } from "@/components/ui/Toast";
+import { formatShortTime } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/cn";
-import { formatByteSize, formatRelativeTime } from "@/lib/utils/format";
 
-const TONE_CLASSES: Record<
-  MomentTone,
-  { card: string; text: string; label: string }
-> = {
-  obsidian: {
-    card: "bg-[#0B0B0E] border-white/14",
-    text: "text-zinc-100",
-    label: "Obsidian",
-  },
-  graphite: {
-    card: "bg-[#18181D] border-white/14",
-    text: "text-zinc-100",
-    label: "Graphite",
-  },
-  slate: {
-    card: "bg-[#24242C] border-white/16",
-    text: "text-white",
-    label: "Charcoal",
-  },
-  ivory: {
-    card: "bg-[#F4F4F6] border-zinc-300",
-    text: "text-zinc-950",
-    label: "Alabaster",
-  },
+const TONE_CLASSES: Record<MomentTone, string> = {
+  obsidian: "bg-[#0B0D12] text-[#F5F7FA] border-white/12",
+  graphite: "bg-[#171B24] text-[#F4F5F8] border-white/15",
+  slate: "bg-[#1D2436] text-[#F8FAFC] border-indigo-400/25",
+  ivory: "bg-[#F4F5F7] text-[#0F1115] border-black/15",
 };
+
+interface AuthorMomentGroup {
+  authorId: string;
+  authorUsername: string;
+  authorDisplayName: string;
+  authorAvatarUrl: string | null;
+  items: ActiveMomentItem[];
+  hasUnviewed: boolean;
+}
 
 export default function MomentsPage() {
   const { user, openReportModal } = useWorkspace();
@@ -72,59 +69,43 @@ export default function MomentsPage() {
   const [moments, setMoments] = useState<ActiveMomentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState<string | null>(null);
-  const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
-  const [composeOpen, setComposeOpen] = useState(false);
+  const [viewerGroupIdx, setViewerGroupIdx] = useState<number | null>(null);
+  const [viewerItemIdx, setViewerItemIdx] = useState(0);
+  const [viewersList, setViewersList] = useState<MomentViewerDetail[]>([]);
+  const [viewersModalOpen, setViewersModalOpen] = useState(false);
+
+  const [createOpen, setCreateOpen] = useState(false);
   const [caption, setCaption] = useState("");
   const [tone, setTone] = useState<MomentTone>("obsidian");
   const [audience, setAudience] = useState<MomentAudience>("everyone");
   const [durationHours, setDurationHours] = useState<MomentDurationHours>(24);
   const [mediaFile, setMediaFile] = useState<File | null>(null);
-  const [uploadPercent, setUploadPercent] = useState<number | null>(null);
+  const [uploadPct, setUploadPct] = useState(0);
   const [publishing, setPublishing] = useState(false);
-  const abortRef = useRef<AbortController | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
 
-  const loadMoments = useCallback(async () => {
-    if (!user?.id) return;
+  const fetchMoments = useCallback(async () => {
     setErrorText(null);
-    const supabase = getSupabaseBrowserClient();
-    const { data, error } = await supabase.rpc("get_active_moments", {
-      p_limit: 60,
-    });
-
-    if (error) {
-      setErrorText(error.message);
+    try {
+      const items = await momentsService.fetchActiveMoments(48);
+      setMoments(items);
+    } catch (err) {
+      setErrorText(
+        err instanceof Error ? err.message : "Unable to load active Moments."
+      );
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const nowMs = Date.now();
-    const activeRows = ((data || []) as ActiveMomentItem[]).filter(
-      (m) => new Date(m.expires_at).getTime() > nowMs
-    );
-
-    await Promise.all([
-      primeAvatarSignedUrls(activeRows.map((m) => m.author_avatar_url)),
-      primeBucketSignedUrls(
-        "social-media",
-        activeRows.map((m) => m.media_path)
-      ),
-    ]);
-
-    setMoments(activeRows);
-    setLoading(false);
-  }, [user?.id]);
+  }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadMoments();
-    const expiryTimer = setInterval(() => {
-      setMoments((prev) =>
-        prev.filter((m) => new Date(m.expires_at).getTime() > Date.now())
-      );
-    }, 30_000);
-    return () => clearInterval(expiryTimer);
-  }, [loadMoments]);
+    const timer = window.setTimeout(() => {
+      void fetchMoments();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [fetchMoments]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -135,66 +116,68 @@ export default function MomentsPage() {
         "postgres_changes",
         { event: "*", schema: "public", table: "moments" },
         () => {
-          void loadMoments();
+          void fetchMoments();
         }
       )
       .subscribe();
-
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [loadMoments, user?.id]);
+  }, [fetchMoments, user?.id]);
 
-  const activeMoment = useMemo(
-    () =>
-      activeIndex !== null && moments[activeIndex]
-        ? moments[activeIndex]
-        : null,
-    [activeIndex, moments]
-  );
-
-  useEffect(() => {
-    if (!activeMoment || !user?.id) return;
-    if (activeMoment.author_id !== user.id && !activeMoment.viewer_has_viewed) {
-      const supabase = getSupabaseBrowserClient();
-      void supabase
-        .rpc("record_moment_view", { p_moment_id: activeMoment.id })
-        .then(() => {
-          setMoments((prev) =>
-            prev.map((m) =>
-              m.id === activeMoment.id
-                ? {
-                    ...m,
-                    viewer_has_viewed: true,
-                    view_count: m.view_count + 1,
-                  }
-                : m
-            )
-          );
+  const groups = useMemo<AuthorMomentGroup[]>(() => {
+    const map = new Map<string, AuthorMomentGroup>();
+    for (const m of moments) {
+      const existing = map.get(m.author_id);
+      if (existing) {
+        existing.items.push(m);
+        if (!m.viewer_has_viewed && m.author_id !== user?.id) {
+          existing.hasUnviewed = true;
+        }
+      } else {
+        map.set(m.author_id, {
+          authorId: m.author_id,
+          authorUsername: m.author_username,
+          authorDisplayName: m.author_display_name,
+          authorAvatarUrl: m.author_avatar_url,
+          items: [m],
+          hasUnviewed: !m.viewer_has_viewed && m.author_id !== user?.id,
         });
+      }
     }
-  }, [activeMoment, user?.id]);
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.authorId === user?.id) return -1;
+      if (b.authorId === user?.id) return 1;
+      if (a.hasUnviewed !== b.hasUnviewed) return a.hasUnviewed ? -1 : 1;
+      return 0;
+    });
+  }, [moments, user?.id]);
+
+  const activeGroup =
+    viewerGroupIdx !== null ? groups[viewerGroupIdx] ?? null : null;
+  const activeItem = activeGroup
+    ? activeGroup.items[viewerItemIdx] ?? null
+    : null;
 
   useEffect(() => {
-    if (activeIndex === null) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setActiveIndex(null);
-      if (e.key === "ArrowRight") {
-        setActiveIndex((idx) =>
-          idx !== null && idx < moments.length - 1 ? idx + 1 : null
+    if (!activeItem || !user?.id) return;
+    if (!activeItem.viewer_has_viewed && activeItem.author_id !== user.id) {
+      void momentsService.recordView(activeItem.id).then(() => {
+        setMoments((prev) =>
+          prev.map((m) =>
+            m.id === activeItem.id
+              ? { ...m, viewer_has_viewed: true, view_count: m.view_count + 1 }
+              : m
+          )
         );
-      }
-      if (e.key === "ArrowLeft") {
-        setActiveIndex((idx) => (idx !== null && idx > 0 ? idx - 1 : idx));
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [activeIndex, moments.length]);
+      });
+    }
+  }, [activeItem, user?.id]);
 
-  const handlePublishMoment = async (e: React.FormEvent) => {
+  const handlePublish = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user?.id || publishing) return;
+    if (!user) return;
+    setCreateError(null);
 
     const parsed = momentCreateSchema.safeParse({
       caption,
@@ -202,31 +185,19 @@ export default function MomentsPage() {
       audience,
       durationHours,
     });
-
     if (!parsed.success) {
-      pushToast({
-        title: "Check Moment details",
-        description: parsed.error.issues[0]?.message,
-        variant: "error",
-      });
+      setCreateError(parsed.error.issues[0]?.message || "Invalid Moment.");
       return;
     }
-
     if (!parsed.data.caption && !mediaFile) {
-      pushToast({
-        title: "Empty Moment",
-        description: "Add a caption or attach an image before sharing.",
-        variant: "error",
-      });
+      setCreateError("Write a caption or attach an image/video.");
       return;
     }
 
     setPublishing(true);
-    const controller = new AbortController();
-    abortRef.current = controller;
-
+    setUploadPct(0);
     try {
-      let uploaded: {
+      let uploadedMedia: {
         storagePath: string;
         mimeType: string;
         width: number | null;
@@ -234,533 +205,653 @@ export default function MomentsPage() {
       } | null = null;
 
       if (mediaFile) {
-        setUploadPercent(0);
-        uploaded = await uploadSocialMediaFile({
+        const res = await mediaService.uploadSocialMediaFile({
           domain: "moments",
           userId: user.id,
           file: mediaFile,
-          kind: "social-image",
-          onProgress: (pct) => setUploadPercent(pct),
-          signal: controller.signal,
+          kind: "social-media",
+          onProgress: setUploadPct,
         });
+        uploadedMedia = {
+          storagePath: res.storagePath,
+          mimeType: res.mimeType,
+          width: res.width,
+          height: res.height,
+        };
       }
 
-      const supabase = getSupabaseBrowserClient();
-      const { error } = await supabase.from("moments").insert({
-        author_id: user.id,
+      await momentsService.createMoment({
+        authorId: user.id,
         caption: parsed.data.caption,
-        background_tone: parsed.data.backgroundTone,
+        backgroundTone: parsed.data.backgroundTone,
         audience: parsed.data.audience,
-        duration_hours: parsed.data.durationHours,
-        media_path: uploaded?.storagePath || null,
-        media_mime: uploaded?.mimeType || null,
-        media_width: uploaded?.width || null,
-        media_height: uploaded?.height || null,
+        durationHours: parsed.data.durationHours,
+        media: uploadedMedia,
       });
 
-      if (error) throw new Error(error.message);
-
-      setComposeOpen(false);
+      setCreateOpen(false);
       setCaption("");
       setMediaFile(null);
-      setUploadPercent(null);
-      pushToast({
-        title: "Moment published",
-        description: `Visible for ${parsed.data.durationHours} hours.`,
-        variant: "success",
-      });
-      await loadMoments();
+      await fetchMoments();
+      pushToast({ title: "Moment published", variant: "success" });
     } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") {
-        pushToast({ title: "Upload cancelled", variant: "default" });
-      } else {
-        pushToast({
-          title: "Could not publish Moment",
-          description: err instanceof Error ? err.message : "Try again.",
-          variant: "error",
-        });
-      }
+      setCreateError(
+        err instanceof Error ? err.message : "Could not publish Moment."
+      );
     } finally {
       setPublishing(false);
-      setUploadPercent(null);
-      abortRef.current = null;
     }
   };
 
   const handleDeleteMoment = async (momentId: string) => {
-    const supabase = getSupabaseBrowserClient();
-    const { error } = await supabase
-      .from("moments")
-      .update({ deleted_at: new Date().toISOString() })
-      .eq("id", momentId);
-    if (error) {
+    try {
+      await momentsService.deleteMoment(momentId);
+      setViewerGroupIdx(null);
+      await fetchMoments();
+      pushToast({ title: "Moment deleted", variant: "success" });
+    } catch (err) {
       pushToast({
-        title: "Could not delete Moment",
-        description: error.message,
+        title: "Unable to delete Moment",
+        description: err instanceof Error ? err.message : "Try again.",
         variant: "error",
       });
-      return;
     }
-    setActiveIndex(null);
-    pushToast({ title: "Moment deleted", variant: "success" });
-    await loadMoments();
+  };
+
+  const handleOpenViewers = async (momentId: string) => {
+    try {
+      const list = await momentsService.fetchMomentViewers(momentId);
+      setViewersList(list);
+      setViewersModalOpen(true);
+    } catch (err) {
+      pushToast({
+        title: "Could not load viewers",
+        description: err instanceof Error ? err.message : "Try again.",
+        variant: "error",
+      });
+    }
+  };
+
+  const audienceBadge = (aud: MomentAudience) => {
+    if (aud === "orbit") {
+      return (
+        <Badge variant="accent" size="sm">
+          <Orbit className="h-2.5 w-2.5" />
+          Close Orbit
+        </Badge>
+      );
+    }
+    if (aud === "contacts") {
+      return (
+        <Badge variant="neutral" size="sm">
+          <Users className="h-2.5 w-2.5" />
+          Contacts
+        </Badge>
+      );
+    }
+    return (
+      <Badge variant="neutral" size="sm">
+        <Globe className="h-2.5 w-2.5" />
+        Everyone
+      </Badge>
+    );
   };
 
   return (
-    <div className="flex h-full w-full flex-col overflow-y-auto bg-[var(--bg-canvas)]">
-      <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-8 sm:py-8 space-y-6">
-        {/* Header */}
-        <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-[var(--border-subtle)] pb-6">
+    <div className="flex h-full flex-col overflow-y-auto px-4 py-6 sm:px-8">
+      <div className="mx-auto w-full max-w-5xl space-y-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-widest text-zinc-400">
-              <Aperture className="h-3.5 w-3.5" />
-              <span>Moments · Ephemeral Updates</span>
-            </div>
-            <h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-white">
-              Temporary updates with automatic expiration
+            <h1 className="text-xl font-semibold tracking-tight text-[var(--text-primary)]">
+              Moments
             </h1>
-            <p className="mt-1 text-sm text-zinc-400">
-              Share lightweight visual or text updates for 6, 12, 24, or 48
-              hours. Database Row Level Security and private media policies stop
-              serving Moments automatically once{" "}
-              <code className="font-mono text-xs text-zinc-300">expires_at</code>{" "}
-              passes.
+            <p className="mt-1 text-xs text-[var(--text-secondary)]">
+              Ephemeral text, photo, and video updates with database-enforced
+              expiration and Everybody, Contacts, or Close Orbit audiences.
             </p>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2">
             <Button
-              type="button"
-              variant="secondary"
               size="sm"
-              onClick={() => void loadMoments()}
-              aria-label="Refresh Moments"
+              variant="secondary"
+              onClick={() => void fetchMoments()}
             >
               <RefreshCw className="h-3.5 w-3.5" />
+              Refresh
             </Button>
             <Button
-              type="button"
-              variant="primary"
               size="sm"
-              onClick={() => setComposeOpen(true)}
+              variant="primary"
+              onClick={() => setCreateOpen(true)}
             >
-              <Plus className="h-4 w-4" />
+              <Plus className="h-3.5 w-3.5" />
               Share Moment
             </Button>
           </div>
-        </header>
+        </div>
 
-        {errorText && (
-          <div className="flex items-center justify-between rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-200">
-            <span>{errorText}</span>
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              onClick={() => void loadMoments()}
-            >
-              Retry
-            </Button>
+        {/* Story Ring Tray */}
+        {groups.length > 0 && (
+          <div className="flex items-center gap-4 overflow-x-auto rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+            {groups.map((grp, idx) => (
+              <button
+                key={grp.authorId}
+                type="button"
+                onClick={() => {
+                  setViewerGroupIdx(idx);
+                  setViewerItemIdx(0);
+                }}
+                className="flex shrink-0 flex-col items-center gap-1.5 cursor-pointer group"
+              >
+                <div
+                  className={cn(
+                    "rounded-full p-0.5 transition-transform group-hover:scale-105",
+                    grp.hasUnviewed
+                      ? "bg-gradient-to-tr from-[var(--accent-primary)] to-sky-400"
+                      : "border border-[var(--border-strong)]"
+                  )}
+                >
+                  <div className="rounded-full bg-[var(--bg-surface)] p-0.5">
+                    <Avatar
+                      name={grp.authorDisplayName}
+                      avatarPath={grp.authorAvatarUrl}
+                      size="lg"
+                    />
+                  </div>
+                </div>
+                <span className="max-w-[76px] truncate text-[11px] font-medium text-[var(--text-primary)]">
+                  {grp.authorId === user?.id ? "You" : grp.authorDisplayName}
+                </span>
+              </button>
+            ))}
           </div>
         )}
 
-        {loading ? (
+        {/* Active Moments Cards Grid */}
+        {errorText ? (
+          <ErrorState
+            title="Could not load Moments"
+            message={errorText}
+            onRetry={() => void fetchMoments()}
+          />
+        ) : loading ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {[1, 2, 3].map((n) => (
-              <Skeleton key={n} className="h-64 rounded-2xl" />
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-64 rounded-2xl" />
             ))}
           </div>
         ) : moments.length === 0 ? (
-          <div className="rounded-2xl border border-white/10 bg-[var(--bg-surface)] px-6 py-14 text-center space-y-4">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-white/12 bg-[var(--bg-elevated)] text-zinc-300">
-              <Clock className="h-5 w-5" />
-            </div>
-            <div className="max-w-md mx-auto space-y-1.5">
-              <h2 className="text-base font-semibold text-white">
-                No active Moments right now
-              </h2>
-              <p className="text-xs text-zinc-400 leading-relaxed">
-                Moments automatically disappear after their configured lifespan.
-                Publish a text or photo Moment to share what you&apos;re working
-                on right now.
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="primary"
-              size="sm"
-              onClick={() => setComposeOpen(true)}
-            >
-              <Plus className="h-4 w-4" />
-              Share a Moment
-            </Button>
-          </div>
+          <EmptyState
+            icon={<Flame className="h-5 w-5" />}
+            title="No active Moments right now"
+            description="Share a photo, short video, or status thought that automatically expires after 6, 12, 24, or 48 hours."
+            action={
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={() => setCreateOpen(true)}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Share first Moment
+              </Button>
+            }
+          />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {moments.map((item, index) => {
-              const toneStyle =
-                TONE_CLASSES[item.background_tone] || TONE_CLASSES.obsidian;
-              const unread =
-                item.author_id !== user?.id && !item.viewer_has_viewed;
+            {moments.map((m) => {
+              const gIdx = groups.findIndex((g) => g.authorId === m.author_id);
+              const iIdx =
+                gIdx >= 0
+                  ? groups[gIdx].items.findIndex((x) => x.id === m.id)
+                  : 0;
+              const isVideo = (m.media_mime || "").startsWith("video/");
 
               return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setActiveIndex(index)}
+                <div
+                  key={m.id}
+                  onClick={() => {
+                    if (gIdx >= 0) {
+                      setViewerGroupIdx(gIdx);
+                      setViewerItemIdx(Math.max(0, iIdx));
+                    }
+                  }}
                   className={cn(
-                    "group relative flex h-72 flex-col justify-between overflow-hidden rounded-2xl border p-5 text-left transition-all cursor-pointer",
-                    toneStyle.card,
-                    unread
-                      ? "ring-2 ring-white/80"
-                      : "hover:border-white/30"
+                    "group relative flex h-72 flex-col justify-between overflow-hidden rounded-2xl border p-4 cursor-pointer transition-transform hover:-translate-y-0.5",
+                    TONE_CLASSES[m.background_tone] || TONE_CLASSES.obsidian
                   )}
                 >
-                  {item.media_path && (
-                    <div className="absolute inset-0 opacity-45 group-hover:opacity-55 transition-opacity">
-                      <PrivateMediaImage
+                  {m.media_path && (
+                    <div className="absolute inset-0">
+                      <PrivateMediaAsset
                         bucket="social-media"
-                        path={item.media_path}
-                        alt={item.caption || "Moment"}
-                        className="h-full w-full rounded-none border-0"
+                        path={m.media_path}
+                        mimeType={m.media_mime}
+                        alt={m.caption || "Moment media"}
+                        controls={false}
+                        className="h-full w-full rounded-none border-0 object-cover opacity-80 group-hover:opacity-90 transition-opacity"
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/50" />
+                      <div className="absolute inset-0 bg-gradient-to-b from-black/65 via-black/25 to-black/80" />
                     </div>
                   )}
 
                   <div className="relative z-10 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0">
                       <Avatar
-                        name={item.author_display_name}
-                        avatarPath={item.author_avatar_url}
+                        name={m.author_display_name}
+                        avatarPath={m.author_avatar_url}
                         size="sm"
                       />
                       <div className="min-w-0">
-                        <p
-                          className={cn(
-                            "text-xs font-semibold truncate",
-                            item.media_path ? "text-white" : toneStyle.text
-                          )}
-                        >
-                          {item.author_display_name}
+                        <p className="truncate text-xs font-semibold text-white">
+                          {m.author_display_name}
                         </p>
-                        <p className="font-mono text-[10px] text-zinc-400 truncate">
-                          @{item.author_username}
+                        <p className="font-mono text-[10px] text-zinc-300">
+                          {formatMomentTimeRemaining(m.expires_at)}
                         </p>
                       </div>
                     </div>
-
-                    <span className="inline-flex items-center gap-1 rounded-full bg-black/65 px-2.5 py-0.5 font-mono text-[10px] text-zinc-200 backdrop-blur-sm shrink-0">
-                      <Clock className="h-2.5 w-2.5" />
-                      {formatMomentTimeRemaining(item.expires_at)}
-                    </span>
+                    <div className="flex items-center gap-1">
+                      {isVideo && (
+                        <Badge variant="neutral" size="sm">
+                          <Film className="h-2.5 w-2.5" />
+                          Video
+                        </Badge>
+                      )}
+                      {audienceBadge(m.audience)}
+                    </div>
                   </div>
 
                   <div className="relative z-10 space-y-2">
-                    {item.caption && (
+                    {m.caption && (
                       <p
                         className={cn(
                           "line-clamp-4 text-sm font-medium leading-relaxed",
-                          item.media_path ? "text-white" : toneStyle.text
+                          m.media_path ? "text-white" : ""
                         )}
                       >
-                        {item.caption}
+                        {m.caption}
                       </p>
                     )}
-                    <div className="flex items-center justify-between font-mono text-[10px] text-zinc-400">
-                      <span>{formatRelativeTime(item.created_at)}</span>
+                    <div className="flex items-center justify-between font-mono text-[10px] opacity-75">
+                      <span>{formatShortTime(m.created_at)}</span>
                       <span className="inline-flex items-center gap-1">
                         <Eye className="h-3 w-3" />
-                        {item.view_count}
+                        {m.view_count}
                       </span>
                     </div>
                   </div>
-                </button>
+                </div>
               );
             })}
           </div>
         )}
       </div>
 
-      {/* Full-Screen Moment Viewer */}
-      {activeMoment && (
+      {/* Fullscreen Moment Lightbox Viewer */}
+      {activeGroup && activeItem && (
         <div
           role="dialog"
           aria-modal="true"
-          aria-label="Moment viewer"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/92 p-4 backdrop-blur-xs animate-asterial-in"
+          onClick={() => setViewerGroupIdx(null)}
         >
-          <div className="relative flex w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-white/15 bg-[var(--bg-surface)]">
-            <div className="flex items-center justify-between border-b border-white/10 px-5 py-3.5">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <Avatar
-                  name={activeMoment.author_display_name}
-                  avatarPath={activeMoment.author_avatar_url}
-                  size="sm"
-                />
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold text-white truncate">
-                    {activeMoment.author_display_name}
-                  </p>
-                  <p className="font-mono text-[10px] text-zinc-400">
-                    @{activeMoment.author_username} ·{" "}
-                    {formatMomentTimeRemaining(activeMoment.expires_at)}
-                  </p>
-                </div>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className={cn(
+              "relative flex h-[84dvh] w-full max-w-md flex-col justify-between overflow-hidden rounded-3xl border p-5 shadow-2xl",
+              TONE_CLASSES[activeItem.background_tone] || TONE_CLASSES.obsidian
+            )}
+          >
+            {/* Progress segments */}
+            <div className="relative z-20 space-y-3">
+              <div className="flex gap-1">
+                {activeGroup.items.map((seg, i) => (
+                  <div
+                    key={seg.id}
+                    className={cn(
+                      "h-1 flex-1 rounded-full",
+                      i <= viewerItemIdx ? "bg-white" : "bg-white/25"
+                    )}
+                  />
+                ))}
               </div>
 
-              <div className="flex items-center gap-1.5">
-                {activeMoment.author_id === user?.id ? (
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <Avatar
+                    name={activeItem.author_display_name}
+                    avatarPath={activeItem.author_avatar_url}
+                    size="sm"
+                  />
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-semibold text-white">
+                      {activeItem.author_display_name}
+                    </p>
+                    <p className="font-mono text-[10px] text-zinc-300">
+                      {formatMomentTimeRemaining(activeItem.expires_at)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  {activeItem.author_id === user?.id ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => void handleOpenViewers(activeItem.id)}
+                        className="inline-flex items-center gap-1 rounded-lg bg-black/40 px-2 py-1 text-[11px] text-white hover:bg-black/60 cursor-pointer"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        {activeItem.view_count}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleDeleteMoment(activeItem.id)}
+                        aria-label="Delete Moment"
+                        className="rounded-lg bg-black/40 p-1.5 text-red-300 hover:bg-red-500/25 cursor-pointer"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        openReportModal({
+                          reportedUserId: activeItem.author_id,
+                          momentId: activeItem.id,
+                          label: "Moment",
+                        })
+                      }
+                      aria-label="Report Moment"
+                      className="rounded-lg bg-black/40 p-1.5 text-zinc-300 hover:text-white cursor-pointer"
+                    >
+                      <Flag className="h-4 w-4" />
+                    </button>
+                  )}
                   <button
                     type="button"
-                    aria-label="Delete Moment"
-                    onClick={() => void handleDeleteMoment(activeMoment.id)}
-                    className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/10 hover:text-red-300 cursor-pointer"
+                    onClick={() => setViewerGroupIdx(null)}
+                    aria-label="Close Moment viewer"
+                    className="rounded-lg bg-black/40 p-1.5 text-white hover:bg-black/60 cursor-pointer"
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <X className="h-4 w-4" />
                   </button>
-                ) : (
-                  <button
-                    type="button"
-                    aria-label="Report Moment"
-                    onClick={() => {
-                      openReportModal({
-                        momentId: activeMoment.id,
-                        reportedUserId: activeMoment.author_id,
-                        label: `Moment by @${activeMoment.author_username}`,
-                      });
-                    }}
-                    className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/10 hover:text-white cursor-pointer"
-                  >
-                    <Flag className="h-4 w-4" />
-                  </button>
-                )}
-                <button
-                  type="button"
-                  aria-label="Close viewer"
-                  onClick={() => setActiveIndex(null)}
-                  className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/10 hover:text-white cursor-pointer"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+                </div>
               </div>
             </div>
 
-            <div
-              className={cn(
-                "flex min-h-[360px] flex-col items-center justify-center p-6 text-center space-y-4",
-                TONE_CLASSES[activeMoment.background_tone]?.card ||
-                  TONE_CLASSES.obsidian.card
-              )}
-            >
-              {activeMoment.media_path && (
-                <PrivateMediaImage
+            {/* Body / Media */}
+            <div className="relative z-10 my-4 flex flex-1 flex-col items-center justify-center overflow-hidden">
+              {activeItem.media_path && (
+                <PrivateMediaAsset
                   bucket="social-media"
-                  path={activeMoment.media_path}
-                  alt={activeMoment.caption || "Moment media"}
-                  className="max-h-80 w-auto object-contain"
+                  path={activeItem.media_path}
+                  mimeType={activeItem.media_mime}
+                  alt={activeItem.caption || "Moment media"}
+                  autoPlay
+                  controls
+                  className="max-h-[52dvh] w-full object-contain"
                 />
               )}
-              {activeMoment.caption && (
+              {activeItem.caption && (
                 <p
                   className={cn(
-                    "max-w-md whitespace-pre-wrap text-base font-medium leading-relaxed",
-                    activeMoment.background_tone === "ivory" &&
-                      !activeMoment.media_path
-                      ? "text-zinc-950"
-                      : "text-white"
+                    "mt-3 text-center leading-relaxed",
+                    activeItem.media_path ? "text-sm text-white" : "text-lg font-medium"
                   )}
                 >
-                  {activeMoment.caption}
+                  {activeItem.caption}
                 </p>
               )}
             </div>
 
-            <div className="flex items-center justify-between border-t border-white/10 px-5 py-3 text-xs text-zinc-400">
-              <div className="flex items-center gap-3 font-mono text-[11px]">
-                <span className="inline-flex items-center gap-1">
-                  <Eye className="h-3.5 w-3.5" />
-                  {activeMoment.view_count} views
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <Users className="h-3.5 w-3.5" />
-                  {activeMoment.audience === "contacts"
-                    ? "Contacts only"
-                    : "Everyone"}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-1.5">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  disabled={activeIndex === 0}
-                  onClick={() =>
-                    setActiveIndex((i) => (i !== null && i > 0 ? i - 1 : i))
+            {/* Prev / Next Controls */}
+            <div className="relative z-20 flex items-center justify-between">
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={viewerGroupIdx === 0 && viewerItemIdx === 0}
+                onClick={() => {
+                  if (viewerItemIdx > 0) {
+                    setViewerItemIdx((i) => i - 1);
+                  } else if (viewerGroupIdx !== null && viewerGroupIdx > 0) {
+                    const prevGroup = groups[viewerGroupIdx - 1];
+                    setViewerGroupIdx(viewerGroupIdx - 1);
+                    setViewerItemIdx(prevGroup.items.length - 1);
                   }
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  disabled={activeIndex === moments.length - 1}
-                  onClick={() =>
-                    setActiveIndex((i) =>
-                      i !== null && i < moments.length - 1 ? i + 1 : i
-                    )
+                }}
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Prev
+              </Button>
+              {audienceBadge(activeItem.audience)}
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  if (viewerItemIdx + 1 < activeGroup.items.length) {
+                    setViewerItemIdx((i) => i + 1);
+                  } else if (
+                    viewerGroupIdx !== null &&
+                    viewerGroupIdx + 1 < groups.length
+                  ) {
+                    setViewerGroupIdx(viewerGroupIdx + 1);
+                    setViewerItemIdx(0);
+                  } else {
+                    setViewerGroupIdx(null);
                   }
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
+                }}
+              >
+                Next
+                <ChevronRight className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Compose Moment Modal */}
-      <Dialog
-        open={composeOpen}
-        onClose={() => {
-          if (publishing) {
-            abortRef.current?.abort();
-          }
-          setComposeOpen(false);
-        }}
-        title="Share a Moment"
-        description="Moments automatically hide from viewers and signed media URLs after expiration. Standard database backups rotate on routine infrastructure schedules."
-      >
-        <form onSubmit={handlePublishMoment} className="space-y-4">
-          <Textarea
-            label="Caption"
-            placeholder="Share a brief thought, update, or milestone..."
-            value={caption}
-            onChange={(e) => setCaption(e.target.value)}
-            maxLength={500}
-          />
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-300">
-              Surface tone
-            </label>
-            <div className="grid grid-cols-4 gap-2">
-              {(["obsidian", "graphite", "slate", "ivory"] as const).map(
-                (t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setTone(t)}
-                    className={cn(
-                      "rounded-xl border px-2.5 py-2 text-xs font-medium transition-all cursor-pointer",
-                      tone === t
-                        ? "border-white bg-white text-zinc-950"
-                        : "border-white/10 text-zinc-400 hover:text-white"
-                    )}
-                  >
-                    {TONE_CLASSES[t].label}
-                  </button>
-                )
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-300">
-                Audience
-              </label>
-              <div className="grid grid-cols-2 gap-1.5">
-                {(
-                  [
-                    ["everyone", "Everyone"],
-                    ["contacts", "Contacts"],
-                  ] as const
-                ).map(([val, label]) => (
-                  <button
-                    key={val}
-                    type="button"
-                    onClick={() => setAudience(val)}
-                    className={cn(
-                      "rounded-xl border px-2.5 py-2 text-xs cursor-pointer",
-                      audience === val
-                        ? "border-white bg-white text-zinc-950 font-medium"
-                        : "border-white/10 text-zinc-400"
-                    )}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-300">
-                Expires after
-              </label>
-              <div className="grid grid-cols-4 gap-1">
-                {([6, 12, 24, 48] as const).map((hrs) => (
-                  <button
-                    key={hrs}
-                    type="button"
-                    onClick={() => setDurationHours(hrs)}
-                    className={cn(
-                      "rounded-xl border py-2 font-mono text-xs cursor-pointer",
-                      durationHours === hrs
-                        ? "border-white bg-white text-zinc-950 font-semibold"
-                        : "border-white/10 text-zinc-400"
-                    )}
-                  >
-                    {hrs}h
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="inline-flex items-center gap-2 rounded-xl border border-white/12 bg-[var(--bg-elevated)] px-3.5 py-2 text-xs text-zinc-200 hover:border-white/25 cursor-pointer">
-              <ImagePlus className="h-4 w-4" />
-              <span>
-                {mediaFile
-                  ? `${mediaFile.name} (${formatByteSize(mediaFile.size)})`
-                  : "Attach photo (optional)"}
-              </span>
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp,image/gif"
-                className="hidden"
-                onChange={(e) => setMediaFile(e.target.files?.[0] || null)}
-              />
-            </label>
-            {uploadPercent !== null && (
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+      {/* Moment Viewers Modal */}
+      {viewersModalOpen && (
+        <Dialog
+          open
+          onClose={() => setViewersModalOpen(false)}
+          title="Moment viewers"
+          description="People who viewed this Moment before expiration."
+        >
+          <div className="max-h-72 overflow-y-auto space-y-2">
+            {viewersList.length === 0 ? (
+              <p className="py-6 text-center text-xs text-[var(--text-muted)]">
+                No views recorded yet.
+              </p>
+            ) : (
+              viewersList.map((v) => (
                 <div
-                  className="h-full bg-white transition-all"
-                  style={{ width: `${uploadPercent}%` }}
-                />
-              </div>
+                  key={v.viewer_id}
+                  className="flex items-center justify-between rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-canvas)] p-2.5"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Avatar
+                      name={v.profile?.display_name || "Viewer"}
+                      avatarPath={v.profile?.avatar_url}
+                      size="sm"
+                    />
+                    <div>
+                      <p className="text-xs font-medium text-[var(--text-primary)]">
+                        {v.profile?.display_name || "ASTERIAL Member"}
+                      </p>
+                      <p className="font-mono text-[10px] text-[var(--text-muted)]">
+                        @{v.profile?.username || "member"}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="font-mono text-[10px] text-[var(--text-muted)]">
+                    {formatShortTime(v.viewed_at)}
+                  </span>
+                </div>
+              ))
             )}
           </div>
+        </Dialog>
+      )}
 
-          <div className="flex justify-end gap-2 pt-2">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => {
-                abortRef.current?.abort();
-                setComposeOpen(false);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" loading={publishing}>
-              Publish Moment
-            </Button>
-          </div>
-        </form>
-      </Dialog>
+      {/* Share Moment Modal */}
+      {createOpen && (
+        <Dialog
+          open
+          onClose={() => setCreateOpen(false)}
+          title="Share a Moment"
+          description="Moments disappear automatically when their timer expires."
+        >
+          <form onSubmit={handlePublish} className="space-y-4">
+            {createError && (
+              <div className="rounded-xl border border-red-500/35 bg-red-500/10 px-3.5 py-2.5 text-xs text-red-300">
+                {createError}
+              </div>
+            )}
+
+            <Textarea
+              label="Caption"
+              placeholder="Share what you’re working on or thinking about…"
+              value={caption}
+              onChange={(e) => setCaption(e.target.value)}
+              maxLength={500}
+            />
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-[var(--text-secondary)]">
+                Photo or Video (optional, up to 25 MB)
+              </label>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm"
+                className="hidden"
+                onChange={(e) => setMediaFile(e.target.files?.[0] ?? null)}
+              />
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => fileRef.current?.click()}
+                >
+                  <ImagePlus className="h-3.5 w-3.5" />
+                  {mediaFile ? "Change media" : "Attach photo or video"}
+                </Button>
+                {mediaFile && (
+                  <span className="truncate text-xs text-[var(--text-secondary)]">
+                    {mediaFile.name}
+                  </span>
+                )}
+              </div>
+              {publishing && mediaFile && uploadPct > 0 && (
+                <p className="font-mono text-[10px] text-[var(--accent-primary)]">
+                  Uploading media… {uploadPct}%
+                </p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-[var(--text-secondary)]">
+                  Audience
+                </label>
+                <div className="flex flex-col gap-1.5">
+                  {(
+                    [
+                      ["everyone", "Everyone", "All signed-in members"],
+                      ["contacts", "Contacts", "Shared direct threads"],
+                      ["orbit", "Close Orbit", "Only your Close Orbit"],
+                    ] as const
+                  ).map(([val, label, hint]) => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setAudience(val)}
+                      className={cn(
+                        "rounded-xl border px-3 py-2 text-left text-xs transition-colors cursor-pointer",
+                        audience === val
+                          ? "border-[var(--accent-primary)] bg-[var(--accent-signal-subtle)] text-[var(--text-primary)] font-medium"
+                          : "border-[var(--border-subtle)] bg-[var(--bg-canvas)] text-[var(--text-secondary)]"
+                      )}
+                    >
+                      <span className="block">{label}</span>
+                      <span className="text-[10px] text-[var(--text-muted)]">
+                        {hint}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-[var(--text-secondary)]">
+                    Expires after
+                  </label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {([6, 12, 24, 48] as const).map((hrs) => (
+                      <button
+                        key={hrs}
+                        type="button"
+                        onClick={() => setDurationHours(hrs)}
+                        className={cn(
+                          "inline-flex items-center justify-center gap-1 rounded-xl border py-2 text-xs cursor-pointer",
+                          durationHours === hrs
+                            ? "border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--accent-primary-fg)] font-medium"
+                            : "border-[var(--border-subtle)] bg-[var(--bg-canvas)] text-[var(--text-secondary)]"
+                        )}
+                      >
+                        <Clock className="h-3 w-3" />
+                        {hrs}h
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-[var(--text-secondary)]">
+                    Card tone
+                  </label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {(["obsidian", "graphite", "slate", "ivory"] as const).map(
+                      (t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => setTone(t)}
+                          className={cn(
+                            "rounded-xl border py-1.5 text-[11px] capitalize cursor-pointer",
+                            tone === t
+                              ? "border-[var(--accent-primary)] bg-[var(--accent-signal-subtle)] text-[var(--text-primary)] font-medium"
+                              : "border-[var(--border-subtle)] bg-[var(--bg-canvas)] text-[var(--text-secondary)]"
+                          )}
+                        >
+                          {t}
+                        </button>
+                      )
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setCreateOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary" loading={publishing}>
+                Publish Moment
+              </Button>
+            </div>
+          </form>
+        </Dialog>
+      )}
     </div>
   );
 }

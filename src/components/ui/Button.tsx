@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils/cn";
 
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "secondary" | "ghost" | "danger";
+  variant?: "primary" | "accent" | "secondary" | "ghost" | "danger";
   size?: "sm" | "md" | "lg" | "icon";
   loading?: boolean;
 }
@@ -27,7 +27,9 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ) => {
     const variantStyles = {
       primary:
-        "bg-white text-zinc-950 hover:bg-zinc-200 active:scale-[0.985] font-medium border border-white",
+        "bg-[var(--accent-primary)] text-[var(--accent-primary-fg)] hover:bg-[var(--accent-primary-hover)] active:scale-[0.985] font-medium border border-transparent shadow-sm",
+      accent:
+        "bg-[var(--accent-signal-subtle)] text-[var(--accent-primary)] hover:brightness-110 active:scale-[0.985] font-medium border border-[var(--border-active)]",
       secondary:
         "bg-[var(--bg-elevated)] text-[var(--text-primary)] hover:bg-[var(--bg-subtle)] active:scale-[0.985] border border-[var(--border-strong)]",
       ghost:

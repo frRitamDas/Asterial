@@ -44,7 +44,6 @@ function NativeAppRouter() {
     profile,
     bootStatus,
     palette,
-    theme,
     conversations,
     isOnline,
     toast,
@@ -95,7 +94,7 @@ function NativeAppRouter() {
   }, [conversations]);
 
   const statusBarStyle =
-    theme === "alabaster" ? "dark-content" : "light-content";
+    palette.bgCanvas === "#F4F5F7" ? "dark-content" : "light-content";
 
   return (
     <SafeAreaView
@@ -335,6 +334,7 @@ function NativeAppRouter() {
             ) : activeTab === "orbits" ? (
               <OrbitsScreen
                 onOpenOrbit={(orbitId) => setActiveOrbitId(orbitId)}
+                onOpenConversation={(id) => setActiveConversationId(id)}
               />
             ) : activeTab === "moments" ? (
               <MomentsScreen />

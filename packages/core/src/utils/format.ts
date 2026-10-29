@@ -143,3 +143,31 @@ export function sanitizeStorageFileName(name: string): string {
     .slice(0, 96);
   return cleaned || "attachment";
 }
+
+/**
+ * Checks whether a user should be shown as actively online (either via Realtime
+ * presence set or a recent `last_seen_at` heartbeat within 90 seconds).
+ */
+export function isUserOnline(
+  lastSeenAt: string | null | undefined,
+  inRealtimePresence = false
+): boolean {
+  if (inRealtimePresence) return true;
+  if (!lastSeenAt) return false;
+  const parsed = new Date(lastSeenAt).getTime();
+  if (Number.isNaN(parsed)) return false;
+  return Date.now() - parsed <= 90_000;
+}
+
+/**
+ * Formats an honest, privacy-respecting presence string ("Online" or last-seen).
+ */
+export function formatPresenceStatus(
+  lastSeenAt: string | null | undefined,
+  inRealtimePresence = false
+): string {
+  if (isUserOnline(lastSeenAt, inRealtimePresence)) {
+    return "Online";
+  }
+  return formatLastSeen(lastSeenAt);
+}
