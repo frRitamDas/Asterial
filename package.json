@@ -1,8 +1,8 @@
 {
   "name": "asterial",
-  "version": "1.4.5",
+  "version": "1.6.0",
   "private": true,
-  "description": "ASTERIAL v1.4.5 — Precision real-time messaging, Orbits, Moments & Social Feed across Web & Android. Official Developer: Ritam Das | By X Huracan.",
+  "description": "ASTERIAL v1.6.0 — Precision real-time messaging, Orbits, Moments & Social Feed across Web & Android. Official Developer: Ritam Das | By X Huracan.",
   "author": "Ritam Das (By X Huracan)",
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0 --port 3000",

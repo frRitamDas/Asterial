@@ -51,6 +51,7 @@ interface MessageComposerProps {
   conversationId: string;
   userId: string;
   initialDraft?: string;
+  enterToSend?: boolean;
   onDraftChange?: (body: string) => void;
   disabled?: boolean;
   disabledReason?: string;
@@ -93,6 +94,7 @@ export function MessageComposer({
   conversationId,
   userId,
   initialDraft = "",
+  enterToSend = true,
   onDraftChange,
   disabled = false,
   disabledReason,
@@ -387,7 +389,17 @@ export function MessageComposer({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key !== "Enter") return;
+
+    if (!enterToSend) {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        void triggerSend();
+      }
+      return;
+    }
+
+    if (!e.shiftKey) {
       const isCoarsePointer =
         typeof window !== "undefined" &&
         window.matchMedia("(pointer: coarse)").matches;
@@ -702,7 +714,11 @@ export function MessageComposer({
               }
             }}
             onKeyDown={handleKeyDown}
-            placeholder="Write a message…"
+            placeholder={
+              enterToSend
+                ? "Write a message…"
+                : "Write a message… (Ctrl/⌘ + Enter to send)"
+            }
             aria-label="Message input"
             maxLength={4000}
             className="max-h-40 min-h-[34px] flex-1 resize-none bg-transparent py-1.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none"

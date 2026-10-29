@@ -1,5 +1,8 @@
 export type PresenceVisibility = "everyone" | "contacts" | "nobody";
 export type AllowDirectMessages = "everyone" | "none";
+export type GroupInvitePermission = "everyone" | "contacts" | "nobody";
+export type MomentsDefaultAudience = "everyone" | "contacts" | "orbit";
+export type MediaAutoDownload = "always" | "images_only" | "manual";
 export type ResolvedAppearanceTheme =
   | "obsidian"
   | "pitch"
@@ -36,6 +39,9 @@ export interface Profile {
   presence_visibility: PresenceVisibility;
   read_receipts_enabled: boolean;
   allow_direct_messages: AllowDirectMessages;
+  moments_default_audience?: MomentsDefaultAudience;
+  group_invite_permission?: GroupInvitePermission;
+  discoverable_by_search?: boolean;
   onboarding_completed: boolean;
   created_at: string;
   updated_at: string;
@@ -56,6 +62,10 @@ export interface NotificationPreferences {
   chat_wallpaper?: ChatWallpaper;
   message_density: MessageDensity;
   reduced_motion: boolean;
+  enter_to_send?: boolean;
+  show_link_previews?: boolean;
+  media_auto_download?: MediaAutoDownload;
+  keep_chats_archived?: boolean;
   updated_at: string;
 }
 

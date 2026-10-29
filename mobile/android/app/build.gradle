@@ -7,7 +7,7 @@ apply plugin: "com.facebook.react"
 def versionMetadataFile = rootProject.file("../../version.json")
 def versionMetadata = versionMetadataFile.exists()
     ? new JsonSlurper().parseText(versionMetadataFile.text)
-    : [version: "1.4.5", versionCode: 14500]
+    : [version: "1.6.0", versionCode: 16000]
 
 def resolvedVersionName = (System.getenv("ASTERIAL_VERSION_NAME") ?: versionMetadata.version).toString()
 def resolvedVersionCode = (System.getenv("ASTERIAL_VERSION_CODE") ?: versionMetadata.versionCode).toInteger()

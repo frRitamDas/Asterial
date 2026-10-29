@@ -10,6 +10,7 @@ import {
   Flame,
   Loader2,
   MessageSquare,
+  Orbit,
   Search,
   Users,
   X,
@@ -467,6 +468,7 @@ type SearchCategory =
   | "users"
   | "chats"
   | "groups"
+  | "orbits"
   | "messages"
   | "moments"
   | "posts";
@@ -525,6 +527,7 @@ function UnifiedSearchModal() {
       users: [],
       conversations: [],
       groups: [],
+      orbits: [],
       messages: [],
       moments: [],
       posts: [],
@@ -535,6 +538,7 @@ function UnifiedSearchModal() {
     data.users.length +
     data.conversations.length +
     data.groups.length +
+    data.orbits.length +
     data.messages.length +
     data.moments.length +
     data.posts.length;
@@ -546,13 +550,13 @@ function UnifiedSearchModal() {
     <Dialog
       open
       onClose={() => setActiveModal(null)}
-      title="Unified Workspace Search"
-      description="Authorized search across People, Direct Chats, Groups, Messages, Moments, and Feed."
+      title="Search ASTERIAL"
+      description="Authorized search across Chats, Messages, People, Groups, Orbits, Moments, and Feed."
       maxWidthClass="max-w-2xl"
     >
       <div className="space-y-3.5">
         <Input
-          placeholder="Search people, conversations, messages, moments, or feed posts…"
+          placeholder="Search chats, messages, people, groups, orbits, or feed…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           leftAddon={<Search className="h-4 w-4" />}
@@ -566,10 +570,11 @@ function UnifiedSearchModal() {
             onChange={setCategory}
             options={[
               { id: "all", label: "All", badge: totalMatches },
-              { id: "users", label: "People", badge: data.users.length },
               { id: "chats", label: "Chats", badge: data.conversations.length },
-              { id: "groups", label: "Groups", badge: data.groups.length },
               { id: "messages", label: "Messages", badge: data.messages.length },
+              { id: "users", label: "People", badge: data.users.length },
+              { id: "groups", label: "Groups", badge: data.groups.length },
+              { id: "orbits", label: "Orbits", badge: data.orbits.length },
               { id: "moments", label: "Moments", badge: data.moments.length },
               { id: "posts", label: "Feed", badge: data.posts.length },
             ]}
@@ -668,6 +673,44 @@ function UnifiedSearchModal() {
                 </section>
               )}
 
+              {/* Orbits */}
+              {showSection("orbits") && data.orbits.length > 0 && (
+                <section className="space-y-1.5">
+                  <p className="px-1 font-mono text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
+                    Orbits
+                  </p>
+                  {data.orbits.map((o) => (
+                    <button
+                      key={o.id}
+                      type="button"
+                      onClick={() => {
+                        setActiveModal(null);
+                        router.push(`/app/orbits/${o.id}`);
+                      }}
+                      className="flex w-full items-center gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-canvas)] p-2.5 text-left hover:border-[var(--border-strong)] transition-colors cursor-pointer"
+                    >
+                      <Avatar
+                        name={o.name}
+                        avatarPath={o.icon_url}
+                        size="sm"
+                        isGroup
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <Orbit className="h-3.5 w-3.5 text-[var(--accent)] shrink-0" />
+                          <p className="truncate text-xs font-medium text-[var(--text-primary)]">
+                            {o.name}
+                          </p>
+                        </div>
+                        <p className="truncate text-[11px] text-[var(--text-muted)]">
+                          {o.description || `${o.member_count} members`}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </section>
+              )}
+
               {/* People */}
               {showSection("users") && data.users.length > 0 && (
                 <section className="space-y-1.5">
@@ -684,7 +727,7 @@ function UnifiedSearchModal() {
                           u.is_blocked_by_me
                         ) {
                           setActiveModal(null);
-                          router.push("/app/contacts");
+                          router.push("/app/people");
                           return;
                         }
                         const convId = await startDirectConversation(u.id);

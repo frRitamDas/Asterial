@@ -21,7 +21,7 @@ export default async function DownloadPage() {
     <div className="min-h-dvh flex flex-col bg-[var(--bg-void)] text-[var(--text-primary)]">
       <header className="sticky top-0 z-30 border-b border-[var(--border-subtle)] bg-[var(--bg-void)] pt-safe">
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-5 sm:px-6">
-          <AsterialLogo showVersion size="sm" />
+          <AsterialLogo size="sm" />
           <div className="flex items-center gap-3 text-xs">
             <Link
               href="/"

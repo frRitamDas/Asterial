@@ -3,7 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getPublicEnv } from "@/lib/env";
 
 const PROTECTED_PREFIX = "/app";
-const AUTH_ROUTES = new Set(["/login", "/signup"]);
+const ONBOARDING_PREFIX = "/onboarding";
+const AUTH_ROUTES = new Set(["/welcome", "/login", "/signup", "/forgot-password"]);
 
 function hasSupabaseAuthCookie(request: NextRequest): boolean {
   return request.cookies
@@ -19,7 +20,10 @@ function hasSupabaseAuthCookie(request: NextRequest): boolean {
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   const isProtected =
-    pathname === PROTECTED_PREFIX || pathname.startsWith(`${PROTECTED_PREFIX}/`);
+    pathname === PROTECTED_PREFIX ||
+    pathname.startsWith(`${PROTECTED_PREFIX}/`) ||
+    pathname === ONBOARDING_PREFIX ||
+    pathname.startsWith(`${ONBOARDING_PREFIX}/`);
   const isAuthPage = AUTH_ROUTES.has(pathname);
 
   if (!isProtected && !isAuthPage) {
@@ -29,7 +33,6 @@ export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
   const hasCookie = hasSupabaseAuthCookie(request);
 
-  // Fast reject when accessing protected workspace with zero auth cookies
   if (isProtected && !hasCookie) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";
@@ -90,12 +93,19 @@ export async function proxy(request: NextRequest) {
 
     return response;
   } catch {
-    // When server-side egress is restricted (e.g., sandbox preview), allow cookie-bearing
-    // requests through to the client workspace guard, which verifies session directly with Supabase.
     return response;
   }
 }
 
 export const config = {
-  matcher: ["/app/:path*", "/app", "/login", "/signup"],
+  matcher: [
+    "/app/:path*",
+    "/app",
+    "/onboarding",
+    "/onboarding/:path*",
+    "/welcome",
+    "/login",
+    "/signup",
+    "/forgot-password",
+  ],
 };

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { Users } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { getInitials } from "@/lib/utils/format";
 import { getCachedSignedUrl, resolveSignedUrl } from "@/lib/supabase/storage";
@@ -61,11 +62,11 @@ export function Avatar({
   }[size];
 
   const dotDims = {
-    xs: "h-2 w-2 -right-0.5 -bottom-0.5",
-    sm: "h-2.5 w-2.5 -right-0.5 -bottom-0.5",
+    xs: "h-2 w-2 right-0 bottom-0",
+    sm: "h-2.5 w-2.5 right-0 bottom-0",
     md: "h-2.5 w-2.5 right-0 bottom-0",
-    lg: "h-3 w-3 right-0 bottom-0",
-    xl: "h-4 w-4 right-0.5 bottom-0.5",
+    lg: "h-3 w-3 right-0.5 bottom-0.5",
+    xl: "h-4 w-4 right-1 bottom-1",
   }[size];
 
   const showImg = Boolean(avatarPath && resolvedUrl && failedPath !== avatarPath);
@@ -74,8 +75,7 @@ export function Avatar({
     <div className={cn("relative inline-flex shrink-0 select-none", className)}>
       <div
         className={cn(
-          "flex items-center justify-center overflow-hidden border border-white/12 bg-[var(--bg-subtle)] font-mono font-medium tracking-wider text-zinc-200",
-          isGroup ? "rounded-xl" : "rounded-full",
+          "flex items-center justify-center overflow-hidden rounded-full border border-[var(--border-subtle)] bg-[var(--surface-elevated)] font-semibold tracking-tight text-[var(--text-primary)]",
           dims
         )}
       >
@@ -91,15 +91,27 @@ export function Avatar({
           <span>{getInitials(name)}</span>
         )}
       </div>
-      {showPresence && !isGroup && (
+
+      {isGroup ? (
         <span
-          aria-label={online ? "Online" : "Offline"}
+          aria-hidden="true"
           className={cn(
-            "absolute rounded-full ring-2 ring-[var(--bg-canvas)] transition-colors",
-            online ? "bg-white" : "bg-zinc-600",
-            dotDims
+            "absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full border border-[var(--surface)] bg-[var(--surface-elevated)] text-[var(--text-secondary)]",
+            size === "xs" || size === "sm" ? "hidden" : ""
           )}
-        />
+        >
+          <Users className="h-2.5 w-2.5" />
+        </span>
+      ) : (
+        (showPresence ? online : online) && (
+          <span
+            aria-label="Online"
+            className={cn(
+              "absolute rounded-full bg-[var(--success)] ring-2 ring-[var(--surface)] transition-colors",
+              dotDims
+            )}
+          />
+        )
       )}
     </div>
   );

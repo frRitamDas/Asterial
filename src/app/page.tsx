@@ -56,12 +56,13 @@ export default function HomePage() {
       <header className="sticky top-0 z-50 border-b border-white/[0.07] bg-[#07080b]/85 backdrop-blur-2xl">
         <div className="mx-auto flex h-[72px] max-w-[1320px] items-center justify-between px-5 sm:px-8 lg:px-12">
           <Link href="/" aria-label="ASTERIAL home" className="shrink-0">
-            <AsterialLogo showVersion size="sm" />
+            <AsterialLogo size="sm" />
           </Link>
           <nav aria-label="Main navigation" className="hidden items-center gap-8 md:flex">
             <a href="#experience" className="text-[13px] text-zinc-400 transition-colors hover:text-white">Experience</a>
             <a href="#features" className="text-[13px] text-zinc-400 transition-colors hover:text-white">Features</a>
             <a href="#privacy" className="text-[13px] text-zinc-400 transition-colors hover:text-white">Privacy</a>
+            <Link href="/welcome" className="text-[13px] text-zinc-400 transition-colors hover:text-white">Welcome</Link>
             <Link href="/download" className="text-[13px] text-zinc-400 transition-colors hover:text-white">Android app</Link>
           </nav>
           <div className="flex items-center gap-2">

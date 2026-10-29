@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -10,204 +10,155 @@ import {
   Loader2,
   Lock,
   Mail,
-  User as UserIcon,
-  XCircle,
+  User,
 } from "lucide-react";
-import { classifyAuthError } from "@asterial/core";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { signupSchema, usernameSchema } from "@/lib/validation/schemas";
+import { signupSchema } from "@/lib/validation/schemas";
 
 export default function SignupPage() {
   const router = useRouter();
 
-  const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [checkedHandle, setCheckedHandle] = useState<{
-    handle: string;
-    state: "available" | "taken" | "idle";
-  } | null>(null);
+  const [usernameStatus, setUsernameStatus] = useState<
+    "idle" | "checking" | "available" | "taken" | "invalid"
+  >("idle");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
-  const [verificationSentTo, setVerificationSentTo] = useState<string | null>(
-    null
-  );
-  const [loading, setLoading] = useState(false);
-  const inFlightRef = useRef(false);
+  const [verificationSent, setVerificationSent] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  const trimmedUsername = username.trim().toLowerCase();
-  const isUsernameFormatValid =
-    trimmedUsername.length > 0 &&
-    usernameSchema.safeParse(trimmedUsername).success;
-
-  // Debounced live username uniqueness check
   useEffect(() => {
-    if (!isUsernameFormatValid) {
-      return;
+    const clean = username.trim().toLowerCase();
+    if (!clean) {
+      const t = window.setTimeout(() => setUsernameStatus("idle"), 0);
+      return () => window.clearTimeout(t);
+    }
+    if (!/^[a-z0-9_]{3,24}$/.test(clean)) {
+      const t = window.setTimeout(() => setUsernameStatus("invalid"), 0);
+      return () => window.clearTimeout(t);
     }
 
-    let active = true;
-    const timer = window.setTimeout(async () => {
+    const handle = window.setTimeout(async () => {
+      setUsernameStatus("checking");
       try {
         const supabase = getSupabaseBrowserClient();
         const { data, error } = await supabase.rpc("check_username_available", {
-          p_username: trimmedUsername,
+          p_username: clean,
         });
-        if (!active) return;
-        if (error) {
-          setCheckedHandle({ handle: trimmedUsername, state: "idle" });
-          return;
+        if (!error && typeof data === "boolean") {
+          setUsernameStatus(data ? "available" : "taken");
+        } else {
+          setUsernameStatus("idle");
         }
-        setCheckedHandle({
-          handle: trimmedUsername,
-          state: data ? "available" : "taken",
-        });
       } catch {
-        if (active) {
-          setCheckedHandle({ handle: trimmedUsername, state: "idle" });
-        }
+        setUsernameStatus("idle");
       }
-    }, 320);
+    }, 280);
 
-    return () => {
-      active = false;
-      window.clearTimeout(timer);
-    };
-  }, [isUsernameFormatValid, trimmedUsername]);
-
-  const usernameState: "idle" | "checking" | "available" | "taken" | "invalid" =
-    !trimmedUsername
-      ? "idle"
-      : !isUsernameFormatValid
-        ? "invalid"
-        : checkedHandle?.handle !== trimmedUsername
-          ? "checking"
-          : checkedHandle.state;
+    return () => window.clearTimeout(handle);
+  }, [username]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (inFlightRef.current) return;
     setFormError(null);
     setFieldErrors({});
 
     const parsed = signupSchema.safeParse({
-      username,
       displayName,
+      username,
       email,
       password,
     });
 
     if (!parsed.success) {
-      const errs: Record<string, string> = {};
+      const nextErrors: Record<string, string> = {};
       for (const issue of parsed.error.issues) {
-        const key = String(issue.path[0] || "");
-        if (key && !errs[key]) errs[key] = issue.message;
+        const key = String(issue.path[0]);
+        if (!nextErrors[key]) nextErrors[key] = issue.message;
       }
-      setFieldErrors(errs);
+      setFieldErrors(nextErrors);
       return;
     }
 
-    if (usernameState === "taken") {
-      setFieldErrors({ username: "That username is already claimed." });
+    if (usernameStatus === "taken") {
+      setFieldErrors({ username: "That @username is already taken." });
       return;
     }
 
-    inFlightRef.current = true;
-    setLoading(true);
+    setSubmitting(true);
     try {
       const supabase = getSupabaseBrowserClient();
-
-      // Double-check availability server-side right before registration
       const { data: available } = await supabase.rpc(
         "check_username_available",
         { p_username: parsed.data.username }
       );
       if (available === false) {
-        setFieldErrors({ username: "That username was just claimed. Pick another." });
-        setLoading(false);
-        inFlightRef.current = false;
+        setFieldErrors({ username: "That @username was just claimed." });
+        setSubmitting(false);
         return;
       }
 
-      const redirectUrl = `${window.location.origin}/auth/callback?next=/app/chats`;
+      const redirectTo = `${window.location.origin}/auth/callback?next=/onboarding`;
       const { data, error } = await supabase.auth.signUp({
         email: parsed.data.email,
         password: parsed.data.password,
         options: {
-          emailRedirectTo: redirectUrl,
+          emailRedirectTo: redirectTo,
           data: {
-            username: parsed.data.username,
             display_name: parsed.data.displayName,
+            username: parsed.data.username,
           },
         },
       });
 
       if (error) {
-        setFormError(
-          classifyAuthError(
-            error,
-            typeof navigator !== "undefined" ? navigator.onLine : true
-          ).userMessage
-        );
-        setLoading(false);
-        inFlightRef.current = false;
+        setFormError(error.message);
         return;
       }
 
       if (data.session) {
-        await supabase.rpc("complete_profile_onboarding", {
-          p_username: parsed.data.username,
-          p_display_name: parsed.data.displayName,
-          p_bio: "",
-          p_status_text: "",
-        });
-        router.replace("/app/chats");
+        router.replace("/onboarding");
         router.refresh();
-        return;
+      } else {
+        setVerificationSent(true);
       }
-
-      setVerificationSentTo(parsed.data.email);
-      setLoading(false);
-      inFlightRef.current = false;
-    } catch (err) {
+    } catch {
       setFormError(
-        classifyAuthError(
-          err,
-          typeof navigator !== "undefined" ? navigator.onLine : true
-        ).userMessage
+        "Network error while creating your account. Please try again."
       );
-      setLoading(false);
-      inFlightRef.current = false;
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  if (verificationSentTo) {
+  if (verificationSent) {
     return (
       <AuthShell
         title="Verify your email"
-        subtitle="One final step to activate your ASTERIAL identity."
+        subtitle="Confirm your email address to continue setting up your profile."
       >
-        <div className="rounded-2xl border border-white/15 bg-white/[0.03] p-6 space-y-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/15 bg-white/[0.06]">
-            <Mail className="h-5 w-5 text-white" />
+        <div className="space-y-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-[12px] border border-[var(--border-subtle)] bg-[var(--surface-elevated)] text-[var(--success)]">
+            <CheckCircle2 className="h-5 w-5" />
           </div>
-          <p className="text-sm text-zinc-300 leading-relaxed">
-            We sent a confirmation link to{" "}
-            <span className="font-mono text-white">{verificationSentTo}</span>.
-            Open the link to complete verification and enter your workspace.
+          <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
+            We sent a verification link to{" "}
+            <span className="font-medium text-[var(--text-primary)]">
+              {email}
+            </span>
+            . Open the link to verify your email and continue onboarding.
           </p>
-          <div className="pt-2">
-            <Link
-              href="/login"
-              className="inline-flex h-10 items-center justify-center rounded-xl bg-white px-4 text-sm font-medium text-zinc-950 hover:bg-zinc-200 transition-colors"
-            >
-              Return to sign in
-            </Link>
-          </div>
+          <Link href="/login" className="block pt-1">
+            <Button variant="secondary" className="w-full">
+              Return to Sign In
+            </Button>
+          </Link>
         </div>
       </AuthShell>
     );
@@ -215,14 +166,15 @@ export default function SignupPage() {
 
   return (
     <AuthShell
-      title="Create your ASTERIAL account"
-      subtitle="Claim your unique handle and start connecting."
+      title="Create your account"
+      subtitle="Claim your @username and continue to profile and privacy setup."
+      activeTab="signup"
       footer={
-        <p className="text-center text-xs text-zinc-400">
+        <p className="text-center text-xs text-[var(--text-secondary)]">
           Already have an account?{" "}
           <Link
             href="/login"
-            className="font-medium text-white underline underline-offset-4 hover:text-zinc-200"
+            className="font-medium text-[var(--text-primary)] underline decoration-[var(--border-strong)] hover:decoration-[var(--accent)]"
           >
             Sign in
           </Link>
@@ -233,114 +185,91 @@ export default function SignupPage() {
         {formError && (
           <div
             role="alert"
-            className="rounded-xl border border-red-500/35 bg-red-500/10 px-3.5 py-2.5 text-xs text-red-300"
+            className="rounded-[12px] border border-[var(--danger)]/35 bg-[var(--danger)]/10 px-3.5 py-2.5 text-xs text-[var(--danger)]"
           >
             {formError}
           </div>
         )}
 
         <Input
-          label="Username"
-          name="username"
-          autoComplete="username"
-          placeholder="ritam_das"
-          value={username}
-          onChange={(e) =>
-            setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))
-          }
-          maxLength={24}
-          leftAddon={<AtSign className="h-4 w-4" />}
-          rightAddon={
-            usernameState === "checking" ? (
-              <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
-            ) : usernameState === "available" ? (
-              <CheckCircle2
-                className="h-4 w-4 text-emerald-400"
-                aria-label="Username available"
-              />
-            ) : usernameState === "taken" ? (
-              <XCircle
-                className="h-4 w-4 text-red-400"
-                aria-label="Username taken"
-              />
-            ) : null
-          }
-          hint={
-            usernameState === "available"
-              ? `@${username} is available`
-              : "3–24 lowercase letters, numbers, or underscores"
-          }
-          error={
-            fieldErrors.username ||
-            (usernameState === "taken"
-              ? "That username is already taken."
-              : undefined)
-          }
+          label="Display name"
+          placeholder="e.g. Aarav Sharma"
+          autoComplete="name"
+          value={displayName}
+          onChange={(e) => setDisplayName(e.target.value)}
+          error={fieldErrors.displayName}
+          leftAddon={<User className="h-4 w-4" />}
           required
         />
 
         <Input
-          label="Display name"
-          name="displayName"
-          autoComplete="name"
-          placeholder="Ritam Das"
-          value={displayName}
-          onChange={(e) => setDisplayName(e.target.value)}
-          maxLength={60}
-          leftAddon={<UserIcon className="h-4 w-4" />}
-          error={fieldErrors.displayName}
+          label="Username"
+          placeholder="aarav_sharma"
+          autoComplete="username"
+          value={username}
+          onChange={(e) =>
+            setUsername(
+              e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "")
+            )
+          }
+          error={fieldErrors.username}
+          hint={
+            usernameStatus === "available"
+              ? `@${username} is available`
+              : usernameStatus === "taken"
+                ? `@${username} is already taken`
+                : "3–24 lowercase letters, numbers, or underscores"
+          }
+          leftAddon={<AtSign className="h-4 w-4" />}
+          rightAddon={
+            usernameStatus === "checking" ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : usernameStatus === "available" ? (
+              <span className="text-[11px] font-medium text-[var(--success)]">
+                Available
+              </span>
+            ) : usernameStatus === "taken" ? (
+              <span className="text-[11px] font-medium text-[var(--danger)]">
+                Taken
+              </span>
+            ) : null
+          }
           required
         />
 
         <Input
           label="Email address"
           type="email"
-          name="email"
-          autoComplete="email"
           placeholder="you@domain.com"
+          autoComplete="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          leftAddon={<Mail className="h-4 w-4" />}
           error={fieldErrors.email}
+          leftAddon={<Mail className="h-4 w-4" />}
           required
         />
 
         <Input
           label="Password"
           type="password"
-          name="password"
+          placeholder="At least 8 characters, 1 letter & 1 number"
           autoComplete="new-password"
-          placeholder="Minimum 8 characters"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          leftAddon={<Lock className="h-4 w-4" />}
-          hint="Use at least 8 characters."
           error={fieldErrors.password}
+          leftAddon={<Lock className="h-4 w-4" />}
           required
         />
 
         <Button
           type="submit"
-          variant="primary"
           size="lg"
-          loading={loading}
-          className="w-full mt-2"
+          loading={submitting}
+          className="w-full"
         >
-          Create account
+          <span>Continue to Profile Setup</span>
           <ArrowRight className="h-4 w-4" />
         </Button>
-
-        <p className="text-[11px] text-zinc-500 text-center leading-relaxed">
-          By creating an account, you agree to the{" "}
-          <Link href="/terms" className="text-zinc-300 underline">
-            Terms of Service
-          </Link>{" "}
-          and{" "}
-          <Link href="/privacy" className="text-zinc-300 underline">
-            Privacy Policy
-          </Link>
-          .
-        </p>
       </form>
     </AuthShell>
   );

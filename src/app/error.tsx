@@ -20,7 +20,7 @@ export default function GlobalError({
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center bg-[#060607] px-6 text-center text-white">
       <div className="mb-8">
-        <AsterialLogo showVersion showAttribution />
+        <AsterialLogo showAttribution />
       </div>
       <div className="max-w-md rounded-2xl border border-white/10 bg-[#0d0d10] p-7 space-y-4">
         <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl border border-red-500/30 bg-red-500/10">

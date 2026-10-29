@@ -548,6 +548,39 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     };
   }, [fetchBlocks, fetchCloseOrbit, fetchConversations, fetchProfileAndPrefs, router]);
 
+  // Route un-onboarded users directly to the dedicated /onboarding flow
+  useEffect(() => {
+    if (
+      !loadingInitial &&
+      user &&
+      profile &&
+      profile.onboarding_completed === false &&
+      pathname.startsWith("/app")
+    ) {
+      router.replace("/onboarding");
+    }
+  }, [loadingInitial, pathname, profile, router, user]);
+
+  // Open requested workspace action from /onboarding or deep links
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const action = params.get("action");
+    if (action === "new-dm" || action === "new-group" || action === "search") {
+      const timer = window.setTimeout(() => {
+        setActiveModal(action);
+      }, 0);
+      params.delete("action");
+      const nextSearch = params.toString();
+      window.history.replaceState(
+        null,
+        "",
+        `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}`
+      );
+      return () => window.clearTimeout(timer);
+    }
+  }, [pathname]);
+
   // Network online/offline listeners + automatic catch-up on reconnect
   useEffect(() => {
     const handleOnline = () => {

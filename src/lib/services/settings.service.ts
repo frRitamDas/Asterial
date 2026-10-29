@@ -7,7 +7,10 @@ import type {
   AllowDirectMessages,
   AppearanceTheme,
   ChatWallpaper,
+  GroupInvitePermission,
+  MediaAutoDownload,
   MessageDensity,
+  MomentsDefaultAudience,
   NotificationPreferences,
   PresenceVisibility,
   Profile,
@@ -28,6 +31,30 @@ export interface AccountDataExport {
   authoredPosts: unknown[];
 }
 
+export interface StorageRecentUploadItem {
+  id: string;
+  source: "chat" | "feed";
+  conversation_id: string | null;
+  file_name: string;
+  mime_type: string;
+  byte_size: number;
+  storage_path: string;
+  bucket: "chat-attachments" | "social-media";
+  created_at: string;
+}
+
+export interface UserStorageSummary {
+  chat_attachment_count: number;
+  chat_attachment_bytes: number;
+  feed_media_count: number;
+  feed_media_bytes: number;
+  orbit_media_count: number;
+  orbit_media_bytes: number;
+  active_moment_media_count: number;
+  total_tracked_bytes: number;
+  recent_uploads: StorageRecentUploadItem[];
+}
+
 export const settingsService = {
   async updateProfile(
     userId: string,
@@ -42,6 +69,10 @@ export const settingsService = {
         | "presence_visibility"
         | "read_receipts_enabled"
         | "allow_direct_messages"
+        | "moments_default_audience"
+        | "group_invite_permission"
+        | "discoverable_by_search"
+        | "onboarding_completed"
       >
     >
   ): Promise<Profile> {
@@ -65,6 +96,9 @@ export const settingsService = {
       presence_visibility?: PresenceVisibility;
       read_receipts_enabled?: boolean;
       allow_direct_messages?: AllowDirectMessages;
+      moments_default_audience?: MomentsDefaultAudience;
+      group_invite_permission?: GroupInvitePermission;
+      discoverable_by_search?: boolean;
     }
   ): Promise<Profile> {
     return settingsService.updateProfile(userId, updates);
@@ -84,6 +118,10 @@ export const settingsService = {
       chat_wallpaper: ChatWallpaper;
       message_density: MessageDensity;
       reduced_motion: boolean;
+      enter_to_send: boolean;
+      show_link_previews: boolean;
+      media_auto_download: MediaAutoDownload;
+      keep_chats_archived: boolean;
     }>
   ): Promise<NotificationPreferences> {
     const supabase = getSupabaseBrowserClient();
@@ -106,6 +144,31 @@ export const settingsService = {
     return data as NotificationPreferences;
   },
 
+  async getMyStorageSummary(): Promise<UserStorageSummary> {
+    const supabase = getSupabaseBrowserClient();
+    const { data, error } = await supabase.rpc("get_my_storage_summary");
+    if (error || !data) {
+      throw normalizeServiceError(
+        error,
+        "Unable to fetch server storage summary."
+      );
+    }
+    const raw = data as Partial<UserStorageSummary>;
+    return {
+      chat_attachment_count: Number(raw.chat_attachment_count ?? 0),
+      chat_attachment_bytes: Number(raw.chat_attachment_bytes ?? 0),
+      feed_media_count: Number(raw.feed_media_count ?? 0),
+      feed_media_bytes: Number(raw.feed_media_bytes ?? 0),
+      orbit_media_count: Number(raw.orbit_media_count ?? 0),
+      orbit_media_bytes: Number(raw.orbit_media_bytes ?? 0),
+      active_moment_media_count: Number(raw.active_moment_media_count ?? 0),
+      total_tracked_bytes: Number(raw.total_tracked_bytes ?? 0),
+      recent_uploads: Array.isArray(raw.recent_uploads)
+        ? (raw.recent_uploads as StorageRecentUploadItem[])
+        : [],
+    };
+  },
+
   async exportMyAccountData(
     userId: string,
     email: string | null
@@ -125,37 +188,26 @@ export const settingsService = {
         .select("*")
         .eq("user_id", userId)
         .maybeSingle(),
-      supabase.from("close_orbits").select("*").eq("owner_id", userId),
+      supabase.rpc("get_my_close_orbit"),
       supabase
         .from("conversation_members")
-        .select(
-          "conversation_id, role, pinned, is_muted, archived, joined_at, left_at"
-        )
-        .eq("user_id", userId),
+        .select("conversation_id, role, pinned, is_muted, archived, joined_at")
+        .eq("user_id", userId)
+        .is("left_at", null),
       supabase
         .from("moments")
-        .select(
-          "id, caption, audience, duration_hours, view_count, created_at, expires_at, deleted_at"
-        )
+        .select("id, caption, audience, created_at, expires_at")
         .eq("author_id", userId)
         .order("created_at", { ascending: false })
-        .limit(200),
+        .limit(100),
       supabase
         .from("posts")
-        .select(
-          "id, body, visibility, like_count, comment_count, created_at, edited_at, deleted_at"
-        )
+        .select("id, body, visibility, like_count, comment_count, created_at")
         .eq("author_id", userId)
+        .is("deleted_at", null)
         .order("created_at", { ascending: false })
         .limit(200),
     ]);
-
-    if (profileRes.error) {
-      throw normalizeServiceError(
-        profileRes.error,
-        "Unable to export account archive."
-      );
-    }
 
     return {
       exportedAt: new Date().toISOString(),
@@ -176,10 +228,7 @@ export const settingsService = {
     const supabase = getSupabaseBrowserClient();
     const { error } = await supabase.rpc("delete_own_account");
     if (error) {
-      throw normalizeServiceError(
-        error,
-        "Unable to delete account right now."
-      );
+      throw normalizeServiceError(error, "Unable to delete account.");
     }
     await supabase.auth.signOut().catch(() => undefined);
   },

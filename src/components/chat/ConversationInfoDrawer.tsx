@@ -44,6 +44,7 @@ interface ConversationInfoDrawerProps {
   summary: ConversationSummary;
   members: GroupMemberDetail[];
   sharedAttachments: AttachmentRow[];
+  sharedLinks?: Array<{ id: string; url: string; host: string; createdAt: string }>;
   onRefreshConversationDetail: () => Promise<void>;
 }
 
@@ -53,6 +54,7 @@ export function ConversationInfoDrawer({
   summary,
   members,
   sharedAttachments,
+  sharedLinks = [],
   onRefreshConversationDetail,
 }: ConversationInfoDrawerProps) {
   const router = useRouter();
@@ -121,7 +123,9 @@ export function ConversationInfoDrawer({
   const canManageGroup =
     isGroup && (myRole === "owner" || myRole === "admin");
   const peer = summary.peerProfile;
-  const peerOnline = Boolean(peer && onlineUserIds.has(peer.id));
+  const peerOnline = Boolean(
+    peer && peer.presence_visibility !== "nobody" && onlineUserIds.has(peer.id)
+  );
   const peerBlocked = Boolean(peer && isBlockedByMe(peer.id));
 
   const handleSaveGroupDetails = async (e: React.FormEvent) => {
@@ -285,19 +289,24 @@ export function ConversationInfoDrawer({
 
   return (
     <>
+      <div
+        aria-hidden="true"
+        onClick={onClose}
+        className="fixed inset-0 z-20 bg-black/45 xl:hidden animate-asterial-in"
+      />
       <aside
         aria-label="Conversation details"
-        className="fixed inset-y-0 right-0 z-30 flex w-full max-w-xs flex-col border-l border-[var(--border-subtle)] bg-[var(--bg-void)] shadow-2xl xl:static xl:z-auto xl:w-[320px] xl:shadow-none animate-asterial-in"
+        className="fixed inset-y-0 right-0 z-30 flex w-full max-w-[320px] flex-col border-l border-[var(--border-subtle)] bg-[var(--surface)] shadow-2xl xl:static xl:z-auto xl:w-[308px] xl:shadow-none animate-asterial-in"
       >
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--border-subtle)] px-4">
-          <h2 className="text-xs font-semibold uppercase tracking-widest font-mono text-zinc-300">
-            {isGroup ? "Group Info" : "Contact Info"}
+          <h2 className="text-xs font-semibold tracking-tight text-[var(--text-primary)]">
+            {isGroup ? "Group Details" : "Contact Details"}
           </h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close details panel"
-            className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/[0.06] hover:text-white cursor-pointer"
+            className="rounded-[8px] p-1.5 text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] cursor-pointer"
           >
             <X className="h-4 w-4" />
           </button>
@@ -404,10 +413,12 @@ export function ConversationInfoDrawer({
                       : ""}
                 </p>
                 {!isGroup && peer && (
-                  <p className="mt-1 text-[11px] text-zinc-500">
+                  <p className="mt-1 text-[11px] text-[var(--text-muted)]">
                     {peerOnline
                       ? "Online now"
-                      : formatLastSeen(summary.peerLastSeenAt)}
+                      : peer.presence_visibility === "nobody"
+                        ? "Last seen hidden"
+                        : formatLastSeen(summary.peerLastSeenAt)}
                   </p>
                 )}
                 {isGroup && summary.conversation.description && (
@@ -637,14 +648,14 @@ export function ConversationInfoDrawer({
             </div>
           )}
 
-          {/* Shared Media & Files */}
-          <div className="space-y-2">
-            <p className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
+          {/* Shared Media, Files & Links */}
+          <div className="space-y-2.5">
+            <p className="text-xs font-semibold text-[var(--text-secondary)]">
               Shared Media &amp; Files ({sharedAttachments.length})
             </p>
             {sharedAttachments.length === 0 ? (
-              <p className="rounded-xl border border-white/[0.06] bg-[var(--bg-surface)] p-4 text-center text-xs text-zinc-500">
-                No attachments shared in this conversation yet.
+              <p className="rounded-[12px] border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-3.5 text-center text-xs text-[var(--text-muted)]">
+                No attachments shared yet.
               </p>
             ) : (
               <div className="space-y-2">
@@ -655,6 +666,32 @@ export function ConversationInfoDrawer({
                     isOwnMessage={false}
                   />
                 ))}
+              </div>
+            )}
+
+            {sharedLinks.length > 0 && (
+              <div className="pt-2 space-y-1.5">
+                <p className="text-xs font-semibold text-[var(--text-secondary)]">
+                  Shared Links ({sharedLinks.length})
+                </p>
+                <div className="space-y-1.5">
+                  {sharedLinks.slice(0, 10).map((lnk) => (
+                    <a
+                      key={lnk.id}
+                      href={lnk.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block rounded-[10px] border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-3 py-2 hover:bg-[var(--surface-hover)] transition-colors"
+                    >
+                      <p className="truncate text-xs font-medium text-[var(--accent)]">
+                        {lnk.host}
+                      </p>
+                      <p className="truncate text-[11px] text-[var(--text-secondary)]">
+                        {lnk.url}
+                      </p>
+                    </a>
+                  ))}
+                </div>
               </div>
             )}
           </div>

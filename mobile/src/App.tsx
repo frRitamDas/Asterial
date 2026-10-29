@@ -93,8 +93,7 @@ function NativeAppRouter() {
     return { totalUnread, groupUnread };
   }, [conversations]);
 
-  const statusBarStyle =
-    palette.bgCanvas === "#F4F5F7" ? "dark-content" : "light-content";
+  const statusBarStyle = !palette.isDark ? "dark-content" : "light-content";
 
   return (
     <SafeAreaView
