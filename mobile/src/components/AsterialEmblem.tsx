@@ -54,10 +54,12 @@ export function BrandLockup({
   palette,
   subtitle,
   compact = false,
+  showVersion = false,
 }: {
   palette: ThemePalette;
   subtitle?: string;
   compact?: boolean;
+  showVersion?: boolean;
 }) {
   return (
     <View style={styles.lockupRow}>
@@ -75,19 +77,21 @@ export function BrandLockup({
           >
             {ASTERIAL_BRAND.name}
           </Text>
-          <View
-            style={[
-              styles.versionPill,
-              {
-                backgroundColor: palette.accentSoft,
-                borderColor: `${palette.accent}45`,
-              },
-            ]}
-          >
-            <Text style={[styles.versionText, { color: palette.accent }]}>
-              v{ASTERIAL_BRAND.version}
-            </Text>
-          </View>
+          {showVersion ? (
+            <View
+              style={[
+                styles.versionPill,
+                {
+                  backgroundColor: palette.accentSoft,
+                  borderColor: `${palette.accent}45`,
+                },
+              ]}
+            >
+              <Text style={[styles.versionText, { color: palette.accent }]}>
+                v{ASTERIAL_BRAND.version}
+              </Text>
+            </View>
+          ) : null}
         </View>
         <Text
           numberOfLines={1}

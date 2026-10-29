@@ -27,22 +27,22 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ) => {
     const variantStyles = {
       primary:
-        "bg-[var(--accent-primary)] text-[var(--accent-primary-fg)] hover:bg-[var(--accent-primary-hover)] active:scale-[0.985] font-medium border border-transparent shadow-sm",
+        "bg-[var(--accent-primary)] text-[var(--accent-primary-fg)] hover:bg-[var(--accent-primary-hover)] active:scale-[0.985] font-medium border border-transparent shadow-xs",
       accent:
         "bg-[var(--accent-signal-subtle)] text-[var(--accent-primary)] hover:brightness-110 active:scale-[0.985] font-medium border border-[var(--border-active)]",
       secondary:
-        "bg-[var(--bg-elevated)] text-[var(--text-primary)] hover:bg-[var(--bg-subtle)] active:scale-[0.985] border border-[var(--border-strong)]",
+        "bg-[var(--bg-elevated)] text-[var(--text-primary)] hover:bg-[var(--bg-subtle)] active:scale-[0.985] border border-[var(--border-subtle)] hover:border-[var(--border-strong)]",
       ghost:
-        "bg-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/[0.05] active:scale-[0.985] border border-transparent",
+        "bg-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)] active:scale-[0.985] border border-transparent",
       danger:
-        "bg-red-500/12 text-red-300 hover:bg-red-500/20 active:scale-[0.985] border border-red-500/30",
+        "bg-[var(--danger)]/12 text-[var(--danger)] hover:bg-[var(--danger)]/20 active:scale-[0.985] border border-[var(--danger)]/30 font-medium",
     }[variant];
 
     const sizeStyles = {
-      sm: "h-8 px-3 text-xs rounded-lg gap-1.5",
-      md: "h-10 px-4 text-sm rounded-xl gap-2",
-      lg: "h-11 px-5 text-sm rounded-xl gap-2.5",
-      icon: "h-9 w-9 rounded-xl justify-center p-0",
+      sm: "h-8 px-3 text-xs rounded-[9px] gap-1.5",
+      md: "h-10 px-4 text-sm rounded-[12px] gap-2",
+      lg: "h-11 px-5 text-sm rounded-[13px] gap-2.5",
+      icon: "h-9 w-9 rounded-[9px] justify-center p-0",
     }[size];
 
     return (

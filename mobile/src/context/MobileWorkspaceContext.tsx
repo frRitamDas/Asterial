@@ -969,6 +969,10 @@ export function MobileWorkspaceProvider({
         appearance_theme: preferences?.appearance_theme ?? cachedTheme,
         message_density: preferences?.message_density ?? cachedDensity,
         reduced_motion: preferences?.reduced_motion ?? false,
+        enter_to_send: preferences?.enter_to_send ?? true,
+        show_link_previews: preferences?.show_link_previews ?? true,
+        media_auto_download: preferences?.media_auto_download ?? "always",
+        keep_chats_archived: preferences?.keep_chats_archived ?? true,
         updated_at: new Date().toISOString(),
         ...patch,
       };

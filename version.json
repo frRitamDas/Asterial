@@ -1,8 +1,8 @@
 {
   "name": "ASTERIAL",
-  "version": "1.4.5",
-  "displayVersion": "1.4.5",
-  "versionCode": 14500,
+  "version": "1.6.0",
+  "displayVersion": "1.6.0",
+  "versionCode": 16000,
   "channel": "stable",
   "developer": "Ritam Das",
   "attribution": "By X Huracan",
@@ -11,9 +11,9 @@
   "githubRepo": "frRitamDas/Asterial",
   "releaseDate": "October 2026",
   "releaseNotes": [
-    "Complete v1.4.5 full-stack messaging & social reconstruction: deep-charcoal workspace (#090A0C / #101216 / #171A20), selective accent themes (Indigo, Cobalt, Emerald, Amber, Monochrome), System auto-theme, and customizable chat wallpapers.",
-    "Upgraded core messaging workflows across Web & Android: message pinning & unpinning, multi-conversation message forwarding, voice-note recording & playback, inline video/document previews, per-chat draft preservation, unread dividers, and scroll-to-latest navigation.",
-    "Personal Close-Connections Orbits & Community Spaces: private owner-isolated Inner Circle and Priority contacts with instant chat launch, live presence, and Orbit-only Moment & Feed audiences.",
-    "Unified authorized workspace search (⌘K / Discover) across People, Conversations, Groups, Messages, Moments, and Feed posts, backed by typed domain service modules and strict PostgreSQL RLS."
+    "Complete ASTERIAL v1.6.0 product redesign: refined #090A0D / #101217 / #171A21 / #7778F6 token system, complete Light & System themes, responsive 4-zone desktop workspace, and dedicated 5-tab mobile architecture.",
+    "Guided first-launch Welcome (/welcome), Account Creation & Recovery (/signup, /login, /forgot-password), and 3-step Onboarding (/onboarding) with live username availability, avatar setup, and initial preferences.",
+    "WhatsApp + Discord messaging experience: sender/time-grouped message clusters, server-enforced group role badges, real Message Info receipt inspector, Enter-to-Send & Link Preview preferences, media auto-load controls, Shared Media drawer, and voice notes.",
+    "Dedicated multi-route Settings Center (/app/settings/*) covering Overview, Profile, Appearance, Chat, Notifications, Privacy (with server-enforced group invite & search discoverability policies), Security, real Storage & Media telemetry, and About."
   ]
 }

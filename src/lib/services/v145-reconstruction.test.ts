@@ -56,9 +56,9 @@ describe("ASTERIAL v1.4.5 reconstruction architecture, security & service contra
     assert.equal(resolveAppearanceTheme("system", false), "obsidian");
     assert.equal(resolveAppearanceTheme("system", true), "alabaster");
 
-    assert.equal(THEME_PALETTES.obsidian.bgCanvas, "#090A0C");
-    assert.equal(THEME_PALETTES.obsidian.bgSurface, "#101216");
-    assert.equal(THEME_PALETTES.obsidian.bgElevated, "#171A20");
+    assert.equal(THEME_PALETTES.obsidian.bgCanvas, "#090A0D");
+    assert.equal(THEME_PALETTES.obsidian.bgSurface, "#101217");
+    assert.equal(THEME_PALETTES.obsidian.bgElevated, "#171A21");
     assert.ok(Object.keys(ACCENT_PRESETS).includes("indigo"));
     assert.ok(Object.keys(ACCENT_PRESETS).includes("cobalt"));
     assert.ok(

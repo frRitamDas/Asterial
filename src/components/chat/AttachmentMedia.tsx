@@ -6,6 +6,7 @@ import {
   ExternalLink,
   FileText,
   Film,
+  Image as ImageIcon,
   Loader2,
   Mic,
   X,
@@ -13,16 +14,18 @@ import {
 import { getCachedSignedUrl, resolveSignedUrl } from "@/lib/supabase/storage";
 import { formatBytes } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/cn";
-import type { AttachmentRow } from "@/lib/types/database";
+import type { AttachmentRow, MediaAutoDownload } from "@/lib/types/database";
 
 interface AttachmentMediaProps {
   attachment: AttachmentRow;
   isOwnMessage: boolean;
+  autoDownloadMode?: MediaAutoDownload;
 }
 
 export function AttachmentMedia({
   attachment,
   isOwnMessage,
+  autoDownloadMode = "always",
 }: AttachmentMediaProps) {
   const mime = attachment.mime_type.toLowerCase();
   const isImage = mime.startsWith("image/");
@@ -33,15 +36,23 @@ export function AttachmentMedia({
     "chat-attachments",
     attachment.storage_path
   );
+  const [manualRequested, setManualRequested] = useState(false);
   const [asyncResolved, setAsyncResolved] = useState<{
     path: string;
     url: string | null;
   } | null>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
 
+  const shouldLoad =
+    Boolean(cachedUrl) ||
+    isOwnMessage ||
+    manualRequested ||
+    autoDownloadMode === "always" ||
+    (autoDownloadMode === "images_only" && isImage);
+
   useEffect(() => {
     let active = true;
-    if (cachedUrl) {
+    if (cachedUrl || !shouldLoad) {
       return;
     }
     resolveSignedUrl("chat-attachments", attachment.storage_path).then((url) => {
@@ -53,7 +64,52 @@ export function AttachmentMedia({
     return () => {
       active = false;
     };
-  }, [attachment.storage_path, cachedUrl]);
+  }, [attachment.storage_path, cachedUrl, shouldLoad]);
+
+  if (!shouldLoad) {
+    const KindIcon = isImage
+      ? ImageIcon
+      : isVideo
+        ? Film
+        : isAudio
+          ? Mic
+          : FileText;
+    const kindLabel = isImage
+      ? "Photo"
+      : isVideo
+        ? "Video"
+        : isAudio
+          ? "Voice / Audio"
+          : "Document";
+
+    return (
+      <button
+        type="button"
+        onClick={() => setManualRequested(true)}
+        className={cn(
+          "mt-1.5 flex w-60 max-w-full items-center justify-between gap-2.5 rounded-[12px] border px-3 py-2 text-left transition-colors cursor-pointer",
+          isOwnMessage
+            ? "border-[var(--bubble-out-border)] bg-black/15 hover:bg-black/25 text-[var(--bubble-out-fg)]"
+            : "border-[var(--border-subtle)] bg-[var(--surface-elevated)] hover:bg-[var(--surface-hover)] text-[var(--text-primary)]"
+        )}
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--accent)]">
+            <KindIcon className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-xs font-medium">
+              Load {kindLabel.toLowerCase()}
+            </p>
+            <p className="truncate font-mono text-[10px] opacity-75">
+              {attachment.file_name} · {formatBytes(attachment.byte_size)}
+            </p>
+          </div>
+        </div>
+        <Download className="h-3.5 w-3.5 shrink-0 opacity-75" />
+      </button>
+    );
+  }
 
   const signedUrl =
     cachedUrl ||
@@ -66,9 +122,9 @@ export function AttachmentMedia({
   if (isImage) {
     return (
       <>
-        <div className="mt-1.5 overflow-hidden rounded-xl border border-white/10 bg-black/20 max-w-xs">
+        <div className="mt-1.5 overflow-hidden rounded-[12px] border border-[var(--border-subtle)] bg-black/15 max-w-xs">
           {loading ? (
-            <div className="flex h-44 w-60 items-center justify-center text-xs text-zinc-400">
+            <div className="flex h-44 w-60 items-center justify-center text-xs text-[var(--text-muted)]">
               <Loader2 className="h-4 w-4 animate-spin" />
             </div>
           ) : signedUrl ? (
@@ -86,7 +142,7 @@ export function AttachmentMedia({
               />
             </button>
           ) : (
-            <div className="flex h-28 w-56 items-center justify-center px-3 text-center text-xs text-zinc-500">
+            <div className="flex h-28 w-56 items-center justify-center px-3 text-center text-xs text-[var(--text-muted)]">
               Attachment unavailable
             </div>
           )}
@@ -98,7 +154,7 @@ export function AttachmentMedia({
             aria-modal="true"
             aria-label={attachment.file_name}
             onClick={() => setLightboxOpen(false)}
-            className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90 p-4 backdrop-blur-xs animate-asterial-in"
+            className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90 p-4 animate-asterial-in"
           >
             <div className="mb-3 flex w-full max-w-4xl items-center justify-between px-2">
               <div className="min-w-0">
@@ -116,16 +172,16 @@ export function AttachmentMedia({
                   rel="noopener noreferrer"
                   download={attachment.file_name}
                   onClick={(e) => e.stopPropagation()}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-white/15 bg-white/[0.06] px-3 text-xs text-white hover:bg-white/[0.12]"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-[9px] border border-white/15 bg-white/[0.08] px-3 text-xs text-white hover:bg-white/[0.14]"
                 >
                   <ExternalLink className="h-3.5 w-3.5" />
-                  Open
+                  <span>Open</span>
                 </a>
                 <button
                   type="button"
                   onClick={() => setLightboxOpen(false)}
                   aria-label="Close image preview"
-                  className="rounded-lg border border-white/15 bg-white/[0.06] p-1.5 text-white hover:bg-white/[0.12] cursor-pointer"
+                  className="rounded-[9px] border border-white/15 bg-white/[0.08] p-1.5 text-white hover:bg-white/[0.14] cursor-pointer"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -137,7 +193,7 @@ export function AttachmentMedia({
               src={signedUrl}
               alt={attachment.file_name}
               onClick={(e) => e.stopPropagation()}
-              className="max-h-[82dvh] max-w-full rounded-xl object-contain shadow-2xl"
+              className="max-h-[82dvh] max-w-full rounded-[14px] object-contain shadow-2xl"
             />
           </div>
         )}
@@ -147,7 +203,7 @@ export function AttachmentMedia({
 
   if (isVideo) {
     return (
-      <div className="mt-1.5 overflow-hidden rounded-xl border border-white/12 bg-black max-w-xs">
+      <div className="mt-1.5 overflow-hidden rounded-[12px] border border-[var(--border-subtle)] bg-black max-w-xs">
         {loading ? (
           <div className="flex h-44 w-64 items-center justify-center gap-2 text-xs text-zinc-400">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -162,7 +218,7 @@ export function AttachmentMedia({
               preload="metadata"
               className="max-h-72 w-full bg-black object-contain"
             />
-            <div className="flex items-center justify-between gap-2 border-t border-white/10 bg-black/50 px-2.5 py-1.5 text-[10px] text-zinc-300">
+            <div className="flex items-center justify-between gap-2 border-t border-white/10 bg-black/60 px-2.5 py-1.5 text-[10px] text-zinc-300">
               <span className="flex items-center gap-1 truncate">
                 <Film className="h-3 w-3 shrink-0" />
                 <span className="truncate">{attachment.file_name}</span>
@@ -186,15 +242,15 @@ export function AttachmentMedia({
     return (
       <div
         className={cn(
-          "mt-1.5 flex w-64 sm:w-72 flex-col gap-2 rounded-xl border px-3 py-2.5",
+          "mt-1.5 flex w-64 sm:w-72 flex-col gap-2 rounded-[12px] border px-3 py-2.5",
           isOwnMessage
-            ? "border-white/15 bg-black/20"
-            : "border-[var(--border-subtle)] bg-[var(--bg-elevated)]"
+            ? "border-[var(--bubble-out-border)] bg-black/15"
+            : "border-[var(--border-subtle)] bg-[var(--surface-elevated)]"
         )}
       >
         <div className="flex items-center justify-between gap-2 text-[11px]">
           <span className="inline-flex items-center gap-1.5 font-medium truncate">
-            <Mic className="h-3.5 w-3.5 text-[var(--accent-primary)] shrink-0" />
+            <Mic className="h-3.5 w-3.5 text-[var(--accent)] shrink-0" />
             <span className="truncate">
               {isVoiceNote ? "Voice Note" : attachment.file_name}
             </span>
@@ -225,14 +281,14 @@ export function AttachmentMedia({
   return (
     <div
       className={cn(
-        "mt-1.5 flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 max-w-xs",
+        "mt-1.5 flex items-center justify-between gap-3 rounded-[12px] border px-3 py-2.5 max-w-xs",
         isOwnMessage
-          ? "border-white/15 bg-black/20 text-[var(--bubble-out-fg)]"
-          : "border-[var(--border-subtle)] bg-[var(--bg-elevated)] text-[var(--text-primary)]"
+          ? "border-[var(--bubble-out-border)] bg-black/15 text-[var(--bubble-out-fg)]"
+          : "border-[var(--border-subtle)] bg-[var(--surface-elevated)] text-[var(--text-primary)]"
       )}
     >
       <div className="flex items-center gap-2.5 min-w-0">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.06]">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--accent)]">
           <FileText className="h-4 w-4" />
         </div>
         <div className="min-w-0">
@@ -252,7 +308,7 @@ export function AttachmentMedia({
           rel="noopener noreferrer"
           download={attachment.file_name}
           aria-label={`Download ${attachment.file_name}`}
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/12 bg-white/[0.06] hover:bg-white/[0.14] transition-colors"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] border border-[var(--border-subtle)] bg-[var(--surface)] hover:bg-[var(--surface-hover)] transition-colors"
         >
           <Download className="h-3.5 w-3.5" />
         </a>

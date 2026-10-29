@@ -31,6 +31,7 @@ import { orbitCreateSchema } from "@asterial/core";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { contactsService, mediaService, orbitsService } from "@/lib/services";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
+import { MobileUtilityActions } from "@/components/workspace/WorkspaceShell";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -308,11 +309,14 @@ export default function OrbitsPage() {
         {/* Header & Primary Mode Switch */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-semibold tracking-tight text-[var(--text-primary)]">
-                Orbits
-              </h1>
-              <Badge variant="accent">Private &amp; Role-Governed</Badge>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-semibold tracking-tight text-[var(--text-primary)]">
+                  Orbits
+                </h1>
+                <Badge variant="accent">Private &amp; Role-Governed</Badge>
+              </div>
+              <MobileUtilityActions />
             </div>
             <p className="mt-1 max-w-2xl text-xs leading-relaxed text-[var(--text-secondary)]">
               {mode === "close"

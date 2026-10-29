@@ -15,7 +15,7 @@ export default function TermsPage() {
       <header className="border-b border-white/[0.08] bg-[var(--bg-void)]">
         <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-6">
           <Link href="/">
-            <AsterialLogo showVersion size="sm" />
+            <AsterialLogo size="sm" />
           </Link>
           <Link
             href="/"

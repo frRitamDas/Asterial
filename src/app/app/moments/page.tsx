@@ -33,6 +33,7 @@ import {
   type MomentViewerDetail,
 } from "@/lib/services";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
+import { MobileUtilityActions } from "@/components/workspace/WorkspaceShell";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -63,7 +64,7 @@ interface AuthorMomentGroup {
 }
 
 export default function MomentsPage() {
-  const { user, openReportModal } = useWorkspace();
+  const { user, profile, openReportModal } = useWorkspace();
   const { pushToast } = useToast();
 
   const [moments, setMoments] = useState<ActiveMomentItem[]>([]);
@@ -85,6 +86,17 @@ export default function MomentsPage() {
   const [publishing, setPublishing] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+
+  const mediaPreviewUrl = useMemo(
+    () => (mediaFile ? URL.createObjectURL(mediaFile) : null),
+    [mediaFile]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (mediaPreviewUrl) URL.revokeObjectURL(mediaPreviewUrl);
+    };
+  }, [mediaPreviewUrl]);
 
   const fetchMoments = useCallback(async () => {
     setErrorText(null);
@@ -301,14 +313,17 @@ export default function MomentsPage() {
     <div className="flex h-full flex-col overflow-y-auto px-4 py-6 sm:px-8">
       <div className="mx-auto w-full max-w-5xl space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight text-[var(--text-primary)]">
-              Moments
-            </h1>
-            <p className="mt-1 text-xs text-[var(--text-secondary)]">
-              Ephemeral text, photo, and video updates with database-enforced
-              expiration and Everybody, Contacts, or Close Orbit audiences.
-            </p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h1 className="text-xl font-semibold tracking-tight text-[var(--text-primary)]">
+                Moments
+              </h1>
+              <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                Ephemeral text, photo, and video updates with database-enforced
+                expiration and Everybody, Contacts, or Close Orbit audiences.
+              </p>
+            </div>
+            <MobileUtilityActions />
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -322,7 +337,10 @@ export default function MomentsPage() {
             <Button
               size="sm"
               variant="primary"
-              onClick={() => setCreateOpen(true)}
+              onClick={() => {
+                setAudience(profile?.moments_default_audience || "everyone");
+                setCreateOpen(true);
+              }}
             >
               <Plus className="h-3.5 w-3.5" />
               Share Moment
@@ -709,6 +727,56 @@ export default function MomentsPage() {
                 {createError}
               </div>
             )}
+
+            {/* Live Preview Before Publish */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs text-[var(--text-secondary)]">
+                <span className="font-medium">Preview</span>
+                <span className="text-[11px] text-[var(--text-muted)]">
+                  Expires in {durationHours}h ·{" "}
+                  {audience === "orbit"
+                    ? "Close Orbit"
+                    : audience === "contacts"
+                      ? "Contacts"
+                      : "Everyone"}
+                </span>
+              </div>
+              <div
+                className={cn(
+                  "relative flex min-h-[156px] flex-col items-center justify-center overflow-hidden rounded-[14px] border p-4 text-center",
+                  TONE_CLASSES[tone]
+                )}
+              >
+                {mediaPreviewUrl && mediaFile ? (
+                  mediaFile.type.startsWith("video/") ? (
+                    <video
+                      src={mediaPreviewUrl}
+                      controls
+                      playsInline
+                      className="max-h-48 w-full rounded-[10px] object-contain"
+                    />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={mediaPreviewUrl}
+                      alt="Moment preview"
+                      className="max-h-48 w-full rounded-[10px] object-contain"
+                    />
+                  )
+                ) : null}
+                <p
+                  className={cn(
+                    "max-w-xs text-sm leading-relaxed break-words",
+                    mediaPreviewUrl ? "mt-2.5 text-xs" : "font-medium"
+                  )}
+                >
+                  {caption.trim() ||
+                    (mediaFile
+                      ? mediaFile.name
+                      : "Your Moment preview appears here as you type…")}
+                </p>
+              </div>
+            </div>
 
             <Textarea
               label="Caption"

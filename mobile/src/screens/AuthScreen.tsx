@@ -430,9 +430,9 @@ export function AuthScreen({
               ]}
             >
               <Text
-                style={[styles.versionPillText, { color: palette.textPrimary }]}
+                style={[styles.versionPillText, { color: palette.textSecondary }]}
               >
-                v{ASTERIAL_BRAND.version} · {ASTERIAL_BRAND.attribution}
+                {ASTERIAL_BRAND.attribution}
               </Text>
             </View>
 

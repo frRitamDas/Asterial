@@ -11,8 +11,12 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   AlertCircle,
+  Archive,
+  ArchiveRestore,
   ArrowDown,
   ArrowLeft,
+  Bell,
+  BellOff,
   Check,
   CheckCheck,
   Clock,
@@ -20,11 +24,13 @@ import {
   CornerUpLeft,
   CornerUpRight,
   Edit2,
+  ExternalLink,
   Flag,
   History,
   Info,
   Loader2,
   Lock,
+  MoreHorizontal,
   Orbit,
   Pin,
   PinOff,
@@ -34,6 +40,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { Dialog } from "@/components/ui/Dialog";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { primeAvatarSignedUrls } from "@/lib/supabase/storage";
 import { messagesService } from "@/lib/services";
@@ -79,6 +86,7 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
   const {
     user,
     profile,
+    preferences,
     conversations,
     onlineUserIds,
     closeOrbitMap,
@@ -87,6 +95,9 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
     setForwardingMessage,
     markConversationRead,
     refreshConversations,
+    togglePin,
+    toggleMute,
+    toggleArchive,
     isBlockedByMe,
     openReportModal,
   } = useWorkspace();
@@ -133,6 +144,8 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
   const [reactionPickerMsgId, setReactionPickerMsgId] = useState<string | null>(
     null
   );
+  const [headerOverflowOpen, setHeaderOverflowOpen] = useState(false);
+  const [actionSheetMsgId, setActionSheetMsgId] = useState<string | null>(null);
   const [typingUsers, setTypingUsers] = useState<
     Map<string, { name: string; expiresAt: number }>
   >(new Map());
@@ -1183,7 +1196,10 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
     if (msg.optimisticState === "failed") return "failed";
     const peerReceipts = msg.receipts.filter((r) => r.user_id !== user?.id);
     if (peerReceipts.length === 0) return "sent";
-    const shareReads = profile?.read_receipts_enabled !== false;
+    const shareReads =
+      profile?.read_receipts_enabled !== false &&
+      (summary?.conversation.type !== "direct" ||
+        summary?.peerProfile?.read_receipts_enabled !== false);
     if (shareReads && peerReceipts.some((r) => Boolean(r.read_at))) {
       return "read";
     }
@@ -1210,6 +1226,45 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
     );
     return target?.id ?? null;
   }, [initialUnreadCutoff, messages, user?.id]);
+
+  const sharedLinks = useMemo(() => {
+    const items: Array<{
+      id: string;
+      url: string;
+      host: string;
+      createdAt: string;
+    }> = [];
+    const seen = new Set<string>();
+    const urlRegex = /https?:\/\/[^\s<>")]+/gi;
+
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (!m || m.deleted_at || !m.body) continue;
+      const matches = m.body.match(urlRegex) || [];
+      for (const raw of matches) {
+        const cleaned = raw.replace(/[.,;:!?)]+$/, "");
+        if (seen.has(cleaned)) continue;
+        try {
+          const parsed = new URL(cleaned);
+          seen.add(cleaned);
+          items.push({
+            id: `${m.id}-${cleaned}`,
+            url: cleaned,
+            host: parsed.hostname.replace(/^www\./, ""),
+            createdAt: m.created_at,
+          });
+        } catch {
+          // Ignore malformed URLs
+        }
+      }
+    }
+    return items;
+  }, [messages]);
+
+  const activeActionMsg = useMemo(
+    () => messages.find((m) => m.id === actionSheetMsgId) || null,
+    [actionSheetMsgId, messages]
+  );
 
   if (accessDenied) {
     return (
@@ -1239,31 +1294,41 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
   const myRole = summary?.membership.role;
   const canPinMessages = !isGroup || myRole === "owner" || myRole === "admin";
   const peer = summary?.peerProfile || null;
-  const peerOnline = Boolean(peer && onlineUserIds.has(peer.id));
+  const peerOnline = Boolean(
+    peer && peer.presence_visibility !== "nobody" && onlineUserIds.has(peer.id)
+  );
   const peerInOrbit = Boolean(peer && closeOrbitMap.has(peer.id));
   const peerBlockedByMe = Boolean(peer && isBlockedByMe(peer.id));
   const typingNames = Array.from(typingUsers.values()).map((t) => t.name);
 
   const headerSubtitle =
     typingNames.length > 0
-      ? `${typingNames.join(", ")} ${typingNames.length === 1 ? "is" : "are"} typing...`
+      ? `${typingNames.join(", ")} ${typingNames.length === 1 ? "is" : "are"} typing…`
       : isGroup
         ? `${members.length} ${members.length === 1 ? "member" : "members"}`
         : peerOnline
-          ? "Online"
-          : formatLastSeen(summary?.peerLastSeenAt);
+          ? "Active now"
+          : peer?.presence_visibility === "nobody"
+            ? `@${peer.username}`
+            : formatLastSeen(summary?.peerLastSeenAt);
 
   return (
-    <div className="flex h-full min-h-0 w-full overflow-hidden">
+    <div
+      className="flex h-full min-h-0 w-full overflow-hidden"
+      onClick={() => {
+        if (headerOverflowOpen) setHeaderOverflowOpen(false);
+        if (reactionPickerMsgId) setReactionPickerMsgId(null);
+      }}
+    >
       {/* Primary Chat Column */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* Conversation Header */}
-        <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-[var(--border-subtle)] bg-[var(--bg-void)] px-3 sm:px-5">
+        <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-[var(--border-subtle)] bg-[var(--surface)] px-3 sm:px-5">
           <div className="flex items-center gap-2.5 min-w-0">
             <Link
               href="/app/chats"
               aria-label="Back to conversations"
-              className="flex md:hidden h-8 w-8 items-center justify-center rounded-lg text-zinc-300 hover:bg-white/[0.06] hover:text-white"
+              className="flex md:hidden h-8 w-8 items-center justify-center rounded-[9px] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]"
             >
               <ArrowLeft className="h-4 w-4" />
             </Link>
@@ -1280,7 +1345,7 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
                   size="sm"
                   isGroup={isGroup}
                   online={peerOnline}
-                  showPresence={!isGroup}
+                  showPresence={!isGroup && peer?.presence_visibility !== "nobody"}
                 />
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
@@ -1289,8 +1354,14 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
                     </p>
                     {peerInOrbit && (
                       <Orbit
-                        className="h-3.5 w-3.5 shrink-0 text-[var(--accent-primary)]"
+                        className="h-3.5 w-3.5 shrink-0 text-[var(--accent)]"
                         aria-label="In your Close Orbit"
+                      />
+                    )}
+                    {summary.membership.is_muted && (
+                      <BellOff
+                        className="h-3 w-3 shrink-0 text-[var(--text-muted)]"
+                        aria-label="Muted"
                       />
                     )}
                   </div>
@@ -1298,7 +1369,7 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
                     className={cn(
                       "truncate text-[11px]",
                       typingNames.length > 0
-                        ? "text-[var(--accent-primary)] font-medium"
+                        ? "text-[var(--accent)] font-medium"
                         : "text-[var(--text-muted)]"
                     )}
                   >
@@ -1317,17 +1388,17 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
             )}
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="relative flex items-center gap-1">
             <button
               type="button"
               onClick={() => setInChatSearchOpen((prev) => !prev)}
               title="Search in conversation"
               aria-label="Search in conversation"
               className={cn(
-                "flex h-8 w-8 items-center justify-center rounded-lg transition-colors cursor-pointer",
+                "flex h-8 w-8 items-center justify-center rounded-[9px] transition-colors cursor-pointer",
                 inChatSearchOpen
-                  ? "bg-white text-zinc-950"
-                  : "text-zinc-400 hover:bg-white/[0.06] hover:text-white"
+                  ? "bg-[var(--accent)] text-[var(--accent-primary-fg)]"
+                  : "text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]"
               )}
             >
               <Search className="h-4 w-4" />
@@ -1335,17 +1406,143 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
             <button
               type="button"
               onClick={() => setInfoOpen((prev) => !prev)}
-              title="Toggle conversation info"
-              aria-label="Toggle conversation info"
+              title="Toggle conversation details"
+              aria-label="Toggle conversation details"
               className={cn(
-                "flex h-8 w-8 items-center justify-center rounded-lg transition-colors cursor-pointer",
+                "flex h-8 w-8 items-center justify-center rounded-[9px] transition-colors cursor-pointer",
                 infoOpen
-                  ? "bg-white text-zinc-950"
-                  : "text-zinc-400 hover:bg-white/[0.06] hover:text-white"
+                  ? "bg-[var(--accent)] text-[var(--accent-primary-fg)]"
+                  : "text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]"
               )}
             >
               <Info className="h-4 w-4" />
             </button>
+
+            {summary && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setHeaderOverflowOpen((prev) => !prev);
+                }}
+                title="Conversation menu"
+                aria-label="Conversation menu"
+                aria-expanded={headerOverflowOpen}
+                className="flex h-8 w-8 items-center justify-center rounded-[9px] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+            )}
+
+            {headerOverflowOpen && summary && (
+              <div
+                role="menu"
+                onClick={(e) => e.stopPropagation()}
+                className="absolute right-0 top-full z-40 mt-1.5 w-52 rounded-[14px] border border-[var(--border-strong)] bg-[var(--surface-elevated)] p-1 shadow-2xl animate-asterial-in"
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setHeaderOverflowOpen(false);
+                    setInfoOpen((prev) => !prev);
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-[9px] px-3 py-2 text-xs text-[var(--text-primary)] hover:bg-[var(--surface-hover)] cursor-pointer"
+                >
+                  <Info className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
+                  <span>{isGroup ? "Group details" : "Contact details"}</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setHeaderOverflowOpen(false);
+                    void togglePin(
+                      conversationId,
+                      !summary.membership.pinned
+                    );
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-[9px] px-3 py-2 text-xs text-[var(--text-primary)] hover:bg-[var(--surface-hover)] cursor-pointer"
+                >
+                  {summary.membership.pinned ? (
+                    <>
+                      <PinOff className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
+                      <span>Unpin conversation</span>
+                    </>
+                  ) : (
+                    <>
+                      <Pin className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
+                      <span>Pin conversation</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setHeaderOverflowOpen(false);
+                    void toggleMute(
+                      conversationId,
+                      !summary.membership.is_muted
+                    );
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-[9px] px-3 py-2 text-xs text-[var(--text-primary)] hover:bg-[var(--surface-hover)] cursor-pointer"
+                >
+                  {summary.membership.is_muted ? (
+                    <>
+                      <Bell className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
+                      <span>Unmute notifications</span>
+                    </>
+                  ) : (
+                    <>
+                      <BellOff className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
+                      <span>Mute notifications</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setHeaderOverflowOpen(false);
+                    void toggleArchive(
+                      conversationId,
+                      !summary.membership.archived
+                    );
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-[9px] px-3 py-2 text-xs text-[var(--text-primary)] hover:bg-[var(--surface-hover)] cursor-pointer"
+                >
+                  {summary.membership.archived ? (
+                    <>
+                      <ArchiveRestore className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
+                      <span>Unarchive conversation</span>
+                    </>
+                  ) : (
+                    <>
+                      <Archive className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
+                      <span>Archive conversation</span>
+                    </>
+                  )}
+                </button>
+                <div className="my-1 border-t border-[var(--border-subtle)]" />
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setHeaderOverflowOpen(false);
+                    openReportModal({
+                      reportedUserId: peer?.id || null,
+                      conversationId,
+                      label: summary.displayTitle,
+                    });
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-[9px] px-3 py-2 text-xs text-[var(--danger)] hover:bg-[var(--danger)]/10 cursor-pointer"
+                >
+                  <Flag className="h-3.5 w-3.5" />
+                  <span>Report {isGroup ? "group" : "user"}</span>
+                </button>
+              </div>
+            )}
           </div>
         </header>
 
@@ -1550,6 +1747,16 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
                   const deliveryState = isOwn
                     ? computeOutgoingState(msg)
                     : null;
+                  const groupedWithPrev = Boolean(
+                    !showDateDivider &&
+                      firstUnreadMessageId !== msg.id &&
+                      prevMsg &&
+                      prevMsg.kind === "user" &&
+                      prevMsg.sender_id === msg.sender_id &&
+                      new Date(msg.created_at).getTime() -
+                        new Date(prevMsg.created_at).getTime() <
+                        5 * 60 * 1000
+                  );
 
                   // Group reactions by emoji
                   const reactionGroups = new Map<
@@ -1566,6 +1773,31 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
                       reactedByMe:
                         existing.reactedByMe || r.user_id === user?.id,
                     });
+                  }
+
+                  let firstLinkPreview: { url: string; host: string; path: string } | null = null;
+                  if (
+                    !isDeleted &&
+                    preferences?.show_link_previews !== false &&
+                    msg.body
+                  ) {
+                    const urlMatch = msg.body.match(/https?:\/\/[^\s<>")]+/i);
+                    if (urlMatch?.[0]) {
+                      const cleanUrl = urlMatch[0].replace(/[.,;:!?)]+$/, "");
+                      try {
+                        const parsedUrl = new URL(cleanUrl);
+                        firstLinkPreview = {
+                          url: cleanUrl,
+                          host: parsedUrl.hostname.replace(/^www\./, ""),
+                          path:
+                            parsedUrl.pathname && parsedUrl.pathname !== "/"
+                              ? parsedUrl.pathname
+                              : cleanUrl,
+                        };
+                      } catch {
+                        firstLinkPreview = null;
+                      }
+                    }
                   }
 
                   return (
@@ -1590,35 +1822,48 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
 
                       <div
                         id={`msg-${msg.id}`}
+                        onContextMenu={(e) => {
+                          if (!isDeleted) {
+                            e.preventDefault();
+                            setActionSheetMsgId(msg.id);
+                          }
+                        }}
                         className={cn(
                           "group relative flex items-end gap-2.5 animate-asterial-in",
                           isOwn ? "justify-end" : "justify-start",
+                          groupedWithPrev ? "-mt-1" : "",
                           highlightMessageId === msg.id
-                            ? "rounded-2xl ring-1 ring-white/40 p-1"
+                            ? "rounded-2xl ring-1 ring-[var(--accent)] p-1"
                             : ""
                         )}
                       >
-                        {!isOwn && (
-                          <Avatar
-                            name={msg.senderProfile?.display_name || "Member"}
-                            avatarPath={msg.senderProfile?.avatar_url}
-                            size="xs"
-                            className="mb-1"
-                          />
-                        )}
+                        {!isOwn &&
+                          (groupedWithPrev ? (
+                            <div className="w-6 shrink-0" aria-hidden="true" />
+                          ) : (
+                            <Avatar
+                              name={msg.senderProfile?.display_name || "Member"}
+                              avatarPath={msg.senderProfile?.avatar_url}
+                              size="xs"
+                              className="mb-1"
+                            />
+                          ))}
 
                         <div
                           className={cn(
-                            "flex max-w-[82%] sm:max-w-[70%] flex-col",
+                            "flex max-w-[84%] sm:max-w-[70%] flex-col",
                             isOwn ? "items-end" : "items-start"
                           )}
                         >
-                          {/* Sender label inside Group Chats */}
-                          {isGroup && !isOwn && msg.senderProfile && (
-                            <span className="mb-1 ml-1 text-[11px] font-medium text-zinc-400">
-                              {msg.senderProfile.display_name}
-                            </span>
-                          )}
+                          {/* Sender label inside Group Chats (hidden on consecutive grouped messages) */}
+                          {isGroup &&
+                            !isOwn &&
+                            !groupedWithPrev &&
+                            msg.senderProfile && (
+                              <span className="mb-1 ml-1 text-[11px] font-medium text-[var(--text-secondary)]">
+                                {msg.senderProfile.display_name}
+                              </span>
+                            )}
 
                           <div className="relative flex items-center gap-1.5">
                             {/* Hover Action Toolbar (Left side for own messages) */}
@@ -1770,11 +2015,38 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
                                       {msg.body}
                                     </p>
                                   )}
+                                  {firstLinkPreview && (
+                                    <a
+                                      href={firstLinkPreview.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className={cn(
+                                        "mt-2 flex items-center justify-between gap-2.5 rounded-[10px] border px-3 py-2 text-xs transition-colors",
+                                        isOwn
+                                          ? "border-[var(--bubble-out-border)] bg-black/15 hover:bg-black/25 text-[var(--bubble-out-fg)]"
+                                          : "border-[var(--border-subtle)] bg-[var(--surface-elevated)] hover:bg-[var(--surface-hover)] text-[var(--text-primary)]"
+                                      )}
+                                    >
+                                      <div className="min-w-0">
+                                        <p className="truncate font-semibold text-[var(--accent)]">
+                                          {firstLinkPreview.host}
+                                        </p>
+                                        <p className="truncate text-[11px] opacity-75">
+                                          {firstLinkPreview.path}
+                                        </p>
+                                      </div>
+                                      <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-70" />
+                                    </a>
+                                  )}
                                   {msg.attachments.map((att) => (
                                     <AttachmentMedia
                                       key={att.id}
                                       attachment={att}
                                       isOwnMessage={isOwn}
+                                      autoDownloadMode={
+                                        preferences?.media_auto_download ||
+                                        "always"
+                                      }
                                     />
                                   ))}
                                 </>
@@ -1998,11 +2270,12 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
             conversationId={conversationId}
             userId={user.id}
             initialDraft={drafts[conversationId] || ""}
+            enterToSend={preferences?.enter_to_send !== false}
             onDraftChange={(val) => setDraft(conversationId, val)}
             disabled={blockedBetweenPeer || peerBlockedByMe}
             disabledReason={
               peerBlockedByMe
-                ? "You blocked this user. Unblock them in Contact Info to send messages."
+                ? "You blocked this user. Unblock them in Contact Details to send messages."
                 : "Messaging is unavailable in this direct conversation due to privacy/block settings."
             }
             replyTo={replyTo}
@@ -2021,9 +2294,188 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
           summary={summary}
           members={members}
           sharedAttachments={sharedAttachments}
+          sharedLinks={sharedLinks}
           onRefreshConversationDetail={fetchConversationMeta}
         />
       )}
+
+      {/* Context Menu / Mobile Message Action Sheet */}
+      <Dialog
+        open={Boolean(activeActionMsg)}
+        onClose={() => setActionSheetMsgId(null)}
+        title="Message actions"
+        description={
+          activeActionMsg
+            ? `Sent ${formatMessageTimestamp(activeActionMsg.created_at)}`
+            : undefined
+        }
+        maxWidthClass="max-w-sm"
+      >
+        {activeActionMsg && (
+          <div className="space-y-3">
+            {/* Quick Reactions */}
+            <div className="flex items-center justify-between rounded-[12px] border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-2.5 py-2">
+              {QUICK_REACTION_EMOJIS.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => {
+                    const target = activeActionMsg;
+                    setActionSheetMsgId(null);
+                    void handleToggleReaction(target, emoji);
+                  }}
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-base hover:bg-[var(--surface-hover)] transition-colors cursor-pointer"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+
+            {/* Honest Delivery / Read Receipt Info for Own Messages */}
+            {activeActionMsg.sender_id === user?.id && (
+              <div className="rounded-[12px] border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-3 py-2 text-xs text-[var(--text-secondary)]">
+                <p className="font-medium text-[var(--text-primary)]">
+                  Status: {computeOutgoingState(activeActionMsg)}
+                </p>
+                {activeActionMsg.receipts.filter((r) => r.user_id !== user?.id)
+                  .length > 0 && (
+                  <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">
+                    Delivered to{" "}
+                    {
+                      activeActionMsg.receipts.filter(
+                        (r) => r.user_id !== user?.id && Boolean(r.delivered_at)
+                      ).length
+                    }{" "}
+                    recipient(s)
+                    {profile?.read_receipts_enabled !== false
+                      ? ` · Read by ${
+                          activeActionMsg.receipts.filter(
+                            (r) => r.user_id !== user?.id && Boolean(r.read_at)
+                          ).length
+                        }`
+                      : ""}
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div className="space-y-1">
+              <button
+                type="button"
+                onClick={() => {
+                  const target = activeActionMsg;
+                  setActionSheetMsgId(null);
+                  setReplyTo({
+                    id: target.id,
+                    senderDisplayName:
+                      target.sender_id === user?.id
+                        ? "You"
+                        : target.senderProfile?.display_name || "Member",
+                    body: target.body,
+                    hasAttachments: target.has_attachments,
+                  });
+                }}
+                className="flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2 text-xs text-[var(--text-primary)] hover:bg-[var(--surface-hover)] cursor-pointer"
+              >
+                <CornerUpLeft className="h-4 w-4 text-[var(--text-secondary)]" />
+                <span>Reply</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const target = activeActionMsg;
+                  setActionSheetMsgId(null);
+                  setForwardingMessage(target);
+                }}
+                className="flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2 text-xs text-[var(--text-primary)] hover:bg-[var(--surface-hover)] cursor-pointer"
+              >
+                <CornerUpRight className="h-4 w-4 text-[var(--text-secondary)]" />
+                <span>Forward</span>
+              </button>
+
+              {canPinMessages && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = activeActionMsg;
+                    setActionSheetMsgId(null);
+                    void handleTogglePinMessage(target);
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2 text-xs text-[var(--text-primary)] hover:bg-[var(--surface-hover)] cursor-pointer"
+                >
+                  <Pin className="h-4 w-4 text-[var(--text-secondary)]" />
+                  <span>
+                    {activeActionMsg.pinned_at ? "Unpin message" : "Pin message"}
+                  </span>
+                </button>
+              )}
+
+              {activeActionMsg.body && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(activeActionMsg.body);
+                    setActionSheetMsgId(null);
+                    pushToast({ title: "Copied message text" });
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2 text-xs text-[var(--text-primary)] hover:bg-[var(--surface-hover)] cursor-pointer"
+                >
+                  <Copy className="h-4 w-4 text-[var(--text-secondary)]" />
+                  <span>Copy text</span>
+                </button>
+              )}
+
+              {activeActionMsg.sender_id === user?.id ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingMessageId(activeActionMsg.id);
+                      setEditDraft(activeActionMsg.body);
+                      setActionSheetMsgId(null);
+                    }}
+                    className="flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2 text-xs text-[var(--text-primary)] hover:bg-[var(--surface-hover)] cursor-pointer"
+                  >
+                    <Edit2 className="h-4 w-4 text-[var(--text-secondary)]" />
+                    <span>Edit message</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const targetId = activeActionMsg.id;
+                      setActionSheetMsgId(null);
+                      void handleDeleteMessage(targetId);
+                    }}
+                    className="flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2 text-xs text-[var(--danger)] hover:bg-[var(--danger)]/10 cursor-pointer"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    <span>Delete message</span>
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = activeActionMsg;
+                    setActionSheetMsgId(null);
+                    openReportModal({
+                      reportedUserId: target.sender_id,
+                      conversationId,
+                      messageId: target.id,
+                      label: "message",
+                    });
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2 text-xs text-[var(--danger)] hover:bg-[var(--danger)]/10 cursor-pointer"
+                >
+                  <Flag className="h-4 w-4" />
+                  <span>Report message</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </Dialog>
     </div>
   );
 }

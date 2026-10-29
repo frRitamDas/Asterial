@@ -16,6 +16,16 @@ const signedUrlCache = new Map<string, SignedCacheEntry>();
 const SIGNED_URL_TTL_SECONDS = 3600;
 const CACHE_BUFFER_MS = 5 * 60 * 1000;
 
+export function getSignedUrlCacheCount(): number {
+  return signedUrlCache.size;
+}
+
+export function clearSignedUrlCache(): number {
+  const count = signedUrlCache.size;
+  signedUrlCache.clear();
+  return count;
+}
+
 function cacheKey(bucket: PrivateBucketId, path: string): string {
   return `${bucket}:${path}`;
 }

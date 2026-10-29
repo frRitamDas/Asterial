@@ -29,6 +29,7 @@ import {
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { feedService, mediaService } from "@/lib/services";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
+import { MobileUtilityActions } from "@/components/workspace/WorkspaceShell";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -379,14 +380,17 @@ export default function CommunityFeedPage() {
       <div className="mx-auto w-full max-w-2xl space-y-6">
         {/* Header */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight text-[var(--text-primary)]">
-              Community Feed
-            </h1>
-            <p className="mt-1 text-xs text-[var(--text-secondary)]">
-              Share updates, media, and threaded discussions with everyone,
-              direct contacts, or your Close Orbit.
-            </p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h1 className="text-xl font-semibold tracking-tight text-[var(--text-primary)]">
+                Community Feed
+              </h1>
+              <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                Share updates, media, and threaded discussions with everyone,
+                direct contacts, or your Close Orbit.
+              </p>
+            </div>
+            <MobileUtilityActions />
           </div>
           <div className="flex items-center gap-2">
             <SegmentedControl<FeedScope>

@@ -108,12 +108,13 @@ function ResetPasswordContent() {
     return (
       <AuthShell
         title="Password updated"
-        subtitle="Your ASTERIAL credentials have been secured."
+        subtitle="Your account credentials have been updated."
+        stepLabel="Account Recovery"
       >
-        <div className="rounded-2xl border border-white/15 bg-white/[0.03] p-6 space-y-4">
-          <CheckCircle2 className="h-7 w-7 text-white" />
-          <p className="text-sm text-zinc-300">
-            Your new password is active. Redirecting to your workspace...
+        <div className="space-y-3 py-1">
+          <CheckCircle2 className="h-6 w-6 text-[var(--success)]" />
+          <p className="text-sm text-[var(--text-secondary)]">
+            Your new password is active. Redirecting to your workspace…
           </p>
         </div>
       </AuthShell>
@@ -125,10 +126,11 @@ function ResetPasswordContent() {
       <AuthShell
         title="Choose a new password"
         subtitle="Enter a strong new password for your ASTERIAL account."
+        stepLabel="Account Recovery"
       >
         <form onSubmit={handleUpdatePassword} className="space-y-4" noValidate>
           {error && (
-            <div className="rounded-xl border border-red-500/35 bg-red-500/10 px-3.5 py-2.5 text-xs text-red-300">
+            <div className="rounded-[12px] border border-[var(--danger)]/35 bg-[var(--danger)]/10 px-3.5 py-2.5 text-xs text-[var(--danger)]">
               {error}
             </div>
           )}
@@ -146,20 +148,14 @@ function ResetPasswordContent() {
             label="Confirm new password"
             type="password"
             autoComplete="new-password"
-            placeholder="Re-enter password"
+            placeholder="Re-enter your password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             leftAddon={<Lock className="h-4 w-4" />}
             required
           />
-          <Button
-            type="submit"
-            variant="primary"
-            size="lg"
-            loading={loading}
-            className="w-full"
-          >
-            Save new password
+          <Button type="submit" size="lg" loading={loading} className="w-full">
+            Save New Password
           </Button>
         </form>
       </AuthShell>
@@ -169,31 +165,33 @@ function ResetPasswordContent() {
   return (
     <AuthShell
       title="Reset your password"
-      subtitle="We will send a recovery link to your registered email address."
+      subtitle="Enter your email address to receive a password recovery link."
+      stepLabel="Account Recovery"
       footer={
         <Link
           href="/login"
-          className="inline-flex items-center gap-2 text-xs text-zinc-400 hover:text-white transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          Back to sign in
+          <span>Back to Sign In</span>
         </Link>
       }
     >
       {sent ? (
-        <div className="rounded-2xl border border-white/15 bg-white/[0.03] p-6 space-y-3">
-          <CheckCircle2 className="h-6 w-6 text-white" />
-          <p className="text-sm font-medium text-white">Recovery link sent</p>
-          <p className="text-xs text-zinc-400 leading-relaxed">
+        <div className="space-y-3 py-1">
+          <CheckCircle2 className="h-6 w-6 text-[var(--success)]" />
+          <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
             If an account exists for{" "}
-            <span className="font-mono text-zinc-200">{email}</span>, a password
-            recovery link has been dispatched.
+            <span className="font-medium text-[var(--text-primary)]">
+              {email}
+            </span>
+            , a recovery link has been sent.
           </p>
         </div>
       ) : (
         <form onSubmit={handleRequestReset} className="space-y-4" noValidate>
           {error && (
-            <div className="rounded-xl border border-red-500/35 bg-red-500/10 px-3.5 py-2.5 text-xs text-red-300">
+            <div className="rounded-[12px] border border-[var(--danger)]/35 bg-[var(--danger)]/10 px-3.5 py-2.5 text-xs text-[var(--danger)]">
               {error}
             </div>
           )}
@@ -207,14 +205,8 @@ function ResetPasswordContent() {
             leftAddon={<Mail className="h-4 w-4" />}
             required
           />
-          <Button
-            type="submit"
-            variant="primary"
-            size="lg"
-            loading={loading}
-            className="w-full"
-          >
-            Send recovery link
+          <Button type="submit" size="lg" loading={loading} className="w-full">
+            Send Recovery Link
           </Button>
         </form>
       )}
@@ -226,8 +218,8 @@ export default function ResetPasswordPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-dvh items-center justify-center bg-[var(--bg-void)] text-xs text-zinc-500 font-mono">
-          Loading recovery...
+        <div className="min-h-dvh bg-[var(--background)] flex items-center justify-center text-xs text-[var(--text-muted)]">
+          Loading…
         </div>
       }
     >

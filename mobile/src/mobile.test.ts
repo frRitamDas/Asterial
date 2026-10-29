@@ -26,13 +26,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const mobileRoot = path.resolve(__dirname, "..");
 const repoRoot = path.resolve(mobileRoot, "..");
 
-describe("ASTERIAL v1.4.5 React Native mobile suite", () => {
-  it("reports synchronized v1.4.5 brand & monotonic Android package metadata", () => {
+describe("ASTERIAL v1.6.0 React Native mobile suite", () => {
+  it("reports synchronized v1.6.0 brand & monotonic Android package metadata", () => {
     assert.equal(ASTERIAL_BRAND.name, "ASTERIAL");
-    assert.equal(ASTERIAL_BRAND.version, "1.4.5");
-    assert.equal(ASTERIAL_BRAND.semver, "1.4.5");
-    assert.equal(ASTERIAL_BRAND.versionCode, 14500);
-    assert.ok(ASTERIAL_BRAND.versionCode > 14200);
+    assert.equal(ASTERIAL_BRAND.version, "1.6.0");
+    assert.equal(ASTERIAL_BRAND.semver, "1.6.0");
+    assert.equal(ASTERIAL_BRAND.versionCode, 16000);
+    assert.ok(ASTERIAL_BRAND.versionCode > 14500);
     assert.equal(ASTERIAL_BRAND.androidPackageId, "com.xhuracan.asterial");
     assert.equal(ASTERIAL_BRAND.developer, "Ritam Das");
     assert.equal(ASTERIAL_BRAND.attribution, "By X Huracan");
@@ -93,7 +93,7 @@ describe("ASTERIAL v1.4.5 React Native mobile suite", () => {
       dependencies?: Record<string, string>;
       devDependencies?: Record<string, string>;
     };
-    assert.equal(pkg.version, "1.4.5");
+    assert.equal(pkg.version, "1.6.0");
 
     const allDeps = {
       ...(pkg.dependencies || {}),

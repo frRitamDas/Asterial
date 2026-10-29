@@ -3,6 +3,7 @@
 import type {
   FeedPostSearchResult,
   MomentSearchResult,
+  OrbitRow,
 } from "@asterial/core";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { primeAvatarSignedUrls } from "@/lib/supabase/storage";
@@ -17,6 +18,7 @@ export interface UnifiedSearchResults {
   users: UserSearchResult[];
   conversations: ConversationSummary[];
   groups: ConversationSummary[];
+  orbits: OrbitRow[];
   messages: MessageSearchResult[];
   moments: MomentSearchResult[];
   posts: FeedPostSearchResult[];
@@ -56,6 +58,7 @@ export const searchService = {
         users: [],
         conversations: [],
         groups: [],
+        orbits: [],
         messages: [],
         moments: [],
         posts: [],
@@ -63,17 +66,25 @@ export const searchService = {
     }
 
     const supabase = getSupabaseBrowserClient();
+    const escapedPattern = `%${q.replace(/[%_]/g, "\\$&")}%`;
 
-    const [usersRes, messagesRes, momentsRes, postsRes] = await Promise.all([
-      supabase.rpc("search_users", { p_query: q, p_limit: limit }),
-      supabase.rpc("search_messages", {
-        p_query: q,
-        p_conversation_id: null,
-        p_limit: limit,
-      }),
-      supabase.rpc("search_moments", { p_query: q, p_limit: limit }),
-      supabase.rpc("search_feed_posts", { p_query: q, p_limit: limit }),
-    ]);
+    const [usersRes, messagesRes, orbitsRes, momentsRes, postsRes] =
+      await Promise.all([
+        supabase.rpc("search_users", { p_query: q, p_limit: limit }),
+        supabase.rpc("search_messages", {
+          p_query: q,
+          p_conversation_id: null,
+          p_limit: limit,
+        }),
+        supabase
+          .from("orbits")
+          .select("*")
+          .or(`name.ilike.${escapedPattern},description.ilike.${escapedPattern}`)
+          .order("member_count", { ascending: false })
+          .limit(limit),
+        supabase.rpc("search_moments", { p_query: q, p_limit: limit }),
+        supabase.rpc("search_feed_posts", { p_query: q, p_limit: limit }),
+      ]);
 
     if (usersRes.error) {
       throw normalizeServiceError(usersRes.error, "Search failed.");
@@ -81,6 +92,7 @@ export const searchService = {
 
     const users = (usersRes.data ?? []) as UserSearchResult[];
     const messages = (messagesRes.data ?? []) as MessageSearchResult[];
+    const orbits = (orbitsRes.data ?? []) as OrbitRow[];
     const moments = (momentsRes.data ?? []) as MomentSearchResult[];
     const posts = (postsRes.data ?? []) as FeedPostSearchResult[];
 
@@ -103,6 +115,7 @@ export const searchService = {
 
     await primeAvatarSignedUrls([
       ...users.map((u) => u.avatar_url),
+      ...orbits.map((o) => o.icon_url),
       ...moments.map((m) => m.author_avatar_url),
       ...posts.map((p) => p.author_avatar_url),
     ]);
@@ -111,6 +124,7 @@ export const searchService = {
       users,
       conversations: matchedConversations.slice(0, limit),
       groups: matchedGroups.slice(0, limit),
+      orbits,
       messages,
       moments,
       posts,

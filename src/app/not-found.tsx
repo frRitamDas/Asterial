@@ -8,7 +8,7 @@ export default function NotFound() {
     <main className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden bg-[var(--bg-void)] px-6 text-center">
       <ConstellationBackdrop />
       <div className="relative z-10 flex max-w-md flex-col items-center">
-        <AsterialLogo showVersion size="md" />
+        <AsterialLogo size="md" />
         <p className="mt-10 font-mono text-xs tracking-[0.2em] text-zinc-500 uppercase">
           404 · Uncharted Coordinate
         </p>

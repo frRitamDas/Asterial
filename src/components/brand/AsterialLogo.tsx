@@ -18,17 +18,16 @@ export function AsterialMark({ size = 32, className }: AsterialMarkProps) {
       viewBox="0 0 64 64"
       fill="none"
       aria-hidden="true"
-      className={cn("shrink-0 select-none", className)}
+      className={cn("shrink-0 select-none text-[var(--text-primary)]", className)}
     >
-      <rect width="64" height="64" rx="15" fill="#0B0B0F" />
+      <rect width="64" height="64" rx="14" fill="var(--surface-elevated)" />
       <rect
-        x="1.25"
-        y="1.25"
-        width="61.5"
-        height="61.5"
-        rx="13.75"
-        stroke="currentColor"
-        strokeOpacity="0.22"
+        x="1"
+        y="1"
+        width="62"
+        height="62"
+        rx="13"
+        stroke="var(--border-subtle)"
         strokeWidth="1.5"
       />
       <circle
@@ -36,7 +35,7 @@ export function AsterialMark({ size = 32, className }: AsterialMarkProps) {
         cy="32"
         r="20.5"
         stroke="currentColor"
-        strokeOpacity="0.14"
+        strokeOpacity="0.16"
         strokeWidth="1"
         strokeDasharray="2 3"
       />
@@ -48,12 +47,12 @@ export function AsterialMark({ size = 32, className }: AsterialMarkProps) {
       />
       <path
         d="M18.5 37.5L32 49.5L45.5 37.5"
-        stroke="currentColor"
-        strokeOpacity="0.6"
-        strokeWidth="1.4"
+        stroke="var(--accent)"
+        strokeOpacity="0.9"
+        strokeWidth="1.5"
         strokeLinejoin="round"
       />
-      <circle cx="32" cy="13.5" r="3" fill="currentColor" />
+      <circle cx="32" cy="13.5" r="2.9" fill="var(--accent)" />
       <circle cx="18.5" cy="37.5" r="2.3" fill="currentColor" />
       <circle cx="45.5" cy="37.5" r="2.3" fill="currentColor" />
       <circle cx="32" cy="31" r="2.3" fill="currentColor" />
@@ -75,30 +74,37 @@ export function AsterialLogo({
   size = "md",
   className,
 }: AsterialLogoProps) {
-  const markSize = size === "sm" ? 28 : size === "lg" ? 40 : 32;
+  const markSize = size === "sm" ? 28 : size === "lg" ? 38 : 32;
   const textClass =
     size === "sm"
-      ? "text-sm tracking-[0.22em]"
+      ? "text-[13px] tracking-[0.20em]"
       : size === "lg"
-        ? "text-xl tracking-[0.26em]"
-        : "text-base tracking-[0.24em]";
+        ? "text-lg tracking-[0.22em]"
+        : "text-sm tracking-[0.21em]";
 
   return (
-    <div className={cn("inline-flex items-center gap-3 text-white", className)}>
+    <div
+      className={cn(
+        "inline-flex items-center gap-2.5 text-[var(--text-primary)]",
+        className
+      )}
+    >
       <AsterialMark size={markSize} />
       <div className="flex flex-col">
         <div className="flex items-center gap-2">
-          <span className={cn("font-semibold uppercase leading-none", textClass)}>
+          <span
+            className={cn("font-semibold uppercase leading-none", textClass)}
+          >
             {ASTERIAL_BRAND.name}
           </span>
           {showVersion && (
-            <span className="rounded-full border border-white/15 bg-white/[0.04] px-2 py-0.5 font-mono text-[10px] font-medium tracking-wider text-zinc-300">
+            <span className="rounded-md border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-1.5 py-0.5 font-mono text-[10px] font-medium tracking-wider text-[var(--text-secondary)]">
               v{ASTERIAL_BRAND.version}
             </span>
           )}
         </div>
         {showAttribution && (
-          <span className="mt-1 font-mono text-[10px] tracking-[0.14em] text-zinc-500 uppercase">
+          <span className="mt-1 font-mono text-[10px] tracking-[0.14em] text-[var(--text-muted)] uppercase">
             {ASTERIAL_BRAND.attribution}
           </span>
         )}

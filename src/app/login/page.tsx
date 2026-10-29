@@ -1,10 +1,9 @@
 "use client";
 
-import React, { Suspense, useRef, useState } from "react";
+import React, { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Lock, Mail } from "lucide-react";
-import { classifyAuthError } from "@asterial/core";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -14,8 +13,11 @@ import { loginSchema, sanitizeRedirectPath } from "@/lib/validation/schemas";
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const nextPath = sanitizeRedirectPath(searchParams.get("next"), "/app/chats");
-  const initialError = searchParams.get("error");
+  const nextPath = sanitizeRedirectPath(
+    searchParams.get("next"),
+    "/app/chats"
+  );
+  const callbackError = searchParams.get("error");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -23,13 +25,11 @@ function LoginForm() {
     email?: string;
     password?: string;
   }>({});
-  const [formError, setFormError] = useState<string | null>(initialError);
-  const [loading, setLoading] = useState(false);
-  const inFlightRef = useRef(false);
+  const [formError, setFormError] = useState<string | null>(callbackError);
+  const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (inFlightRef.current) return;
     setFormError(null);
     setFieldErrors({});
 
@@ -37,58 +37,62 @@ function LoginForm() {
     if (!parsed.success) {
       const nextErrors: { email?: string; password?: string } = {};
       for (const issue of parsed.error.issues) {
-        const key = issue.path[0];
-        if (key === "email" && !nextErrors.email) nextErrors.email = issue.message;
-        if (key === "password" && !nextErrors.password)
-          nextErrors.password = issue.message;
+        const key = issue.path[0] as "email" | "password";
+        if (!nextErrors[key]) nextErrors[key] = issue.message;
       }
       setFieldErrors(nextErrors);
       return;
     }
 
-    inFlightRef.current = true;
-    setLoading(true);
+    setSubmitting(true);
     try {
       const supabase = getSupabaseBrowserClient();
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: parsed.data.email,
         password: parsed.data.password,
       });
 
-      if (error) {
-        const classified = classifyAuthError(
-          error,
-          typeof navigator !== "undefined" ? navigator.onLine : true
+      if (error || !data.user) {
+        setFormError(
+          error?.message === "Invalid login credentials"
+            ? "Incorrect email or password."
+            : error?.message || "Unable to sign in right now."
         );
-        setFormError(classified.userMessage);
-        setLoading(false);
-        inFlightRef.current = false;
         return;
       }
 
-      router.replace(nextPath);
+      const { data: profileRow } = await supabase
+        .from("profiles")
+        .select("onboarding_completed")
+        .eq("id", data.user.id)
+        .maybeSingle();
+
+      if (profileRow && profileRow.onboarding_completed === false) {
+        router.replace("/onboarding");
+      } else {
+        router.replace(nextPath);
+      }
       router.refresh();
-    } catch (err) {
-      const classified = classifyAuthError(
-        err,
-        typeof navigator !== "undefined" ? navigator.onLine : true
+    } catch {
+      setFormError(
+        "Network error while reaching authentication. Check your connection and try again."
       );
-      setFormError(classified.userMessage);
-      setLoading(false);
-      inFlightRef.current = false;
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
     <AuthShell
-      title="Sign in to ASTERIAL"
-      subtitle="Enter your credentials to resume your workspace."
+      title="Welcome back"
+      subtitle="Sign in with your email and password to open your conversations."
+      activeTab="login"
       footer={
-        <p className="text-center text-xs text-zinc-400">
+        <p className="text-center text-xs text-[var(--text-secondary)]">
           New to ASTERIAL?{" "}
           <Link
             href="/signup"
-            className="font-medium text-white underline underline-offset-4 hover:text-zinc-200"
+            className="font-medium text-[var(--text-primary)] underline decoration-[var(--border-strong)] hover:decoration-[var(--accent)]"
           >
             Create an account
           </Link>
@@ -99,7 +103,7 @@ function LoginForm() {
         {formError && (
           <div
             role="alert"
-            className="rounded-xl border border-red-500/35 bg-red-500/10 px-3.5 py-2.5 text-xs text-red-200"
+            className="rounded-[12px] border border-[var(--danger)]/35 bg-[var(--danger)]/10 px-3.5 py-2.5 text-xs text-[var(--danger)]"
           >
             {formError}
           </div>
@@ -108,7 +112,6 @@ function LoginForm() {
         <Input
           label="Email address"
           type="email"
-          name="email"
           autoComplete="email"
           placeholder="you@domain.com"
           value={email}
@@ -119,24 +122,9 @@ function LoginForm() {
         />
 
         <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <label
-              htmlFor="login-password"
-              className="text-xs font-medium tracking-wide text-zinc-300"
-            >
-              Password
-            </label>
-            <Link
-              href="/reset-password"
-              className="text-xs text-zinc-400 hover:text-white transition-colors"
-            >
-              Forgot password?
-            </Link>
-          </div>
           <Input
-            id="login-password"
+            label="Password"
             type="password"
-            name="password"
             autoComplete="current-password"
             placeholder="Enter your password"
             value={password}
@@ -145,16 +133,23 @@ function LoginForm() {
             leftAddon={<Lock className="h-4 w-4" />}
             required
           />
+          <div className="flex justify-end">
+            <Link
+              href="/forgot-password"
+              className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+            >
+              Forgot password?
+            </Link>
+          </div>
         </div>
 
         <Button
           type="submit"
-          variant="primary"
           size="lg"
-          loading={loading}
-          className="w-full mt-2"
+          loading={submitting}
+          className="w-full"
         >
-          Sign in
+          <span>Sign In</span>
           <ArrowRight className="h-4 w-4" />
         </Button>
       </form>
@@ -166,8 +161,8 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-dvh items-center justify-center bg-[var(--bg-void)] text-xs text-zinc-500 font-mono">
-          Initializing ASTERIAL...
+        <div className="min-h-dvh bg-[var(--background)] flex items-center justify-center text-xs text-[var(--text-muted)]">
+          Loading authentication…
         </div>
       }
     >

@@ -39,14 +39,14 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
         {label && (
           <label
             htmlFor={inputId}
-            className="text-xs font-medium tracking-wide text-zinc-300"
+            className="text-xs font-medium tracking-wide text-[var(--text-secondary)]"
           >
             {label}
           </label>
         )}
         <div className="relative flex items-center">
           {leftAddon && (
-            <div className="pointer-events-none absolute left-3 text-zinc-500 flex items-center">
+            <div className="pointer-events-none absolute left-3 text-[var(--text-muted)] flex items-center">
               {leftAddon}
             </div>
           )}
@@ -59,11 +59,11 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
               error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined
             }
             className={cn(
-              "h-10 w-full rounded-xl border bg-[var(--bg-surface)] px-3.5 text-sm text-[var(--text-primary)] placeholder:text-zinc-600 transition-colors",
+              "h-10 w-full rounded-[12px] border bg-[var(--bg-surface)] px-3.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] transition-colors",
               "border-[var(--border-subtle)] hover:border-[var(--border-strong)] focus:border-[var(--border-active)] focus:outline-none",
               leftAddon ? "pl-9" : "",
               isPassword || rightAddon ? "pr-10" : "",
-              error ? "border-red-500/60 focus:border-red-400" : "",
+              error ? "border-[var(--danger)]/70 focus:border-[var(--danger)]" : "",
               className
             )}
             {...props}
@@ -74,7 +74,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
               tabIndex={-1}
               onClick={() => setShowPassword((prev) => !prev)}
               aria-label={showPassword ? "Hide password" : "Show password"}
-              className="absolute right-2.5 rounded-md p-1 text-zinc-500 hover:text-zinc-200 transition-colors cursor-pointer"
+              className="absolute right-2.5 rounded-[8px] p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
             >
               {showPassword ? (
                 <EyeOff className="h-4 w-4" />
@@ -83,17 +83,17 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
               )}
             </button>
           ) : rightAddon ? (
-            <div className="absolute right-3 flex items-center text-zinc-400">
+            <div className="absolute right-3 flex items-center text-[var(--text-secondary)]">
               {rightAddon}
             </div>
           ) : null}
         </div>
         {error ? (
-          <p id={`${inputId}-error`} className="text-xs text-red-400">
+          <p id={`${inputId}-error`} className="text-xs text-[var(--danger)]">
             {error}
           </p>
         ) : hint ? (
-          <p id={`${inputId}-hint`} className="text-xs text-zinc-500">
+          <p id={`${inputId}-hint`} className="text-xs text-[var(--text-muted)]">
             {hint}
           </p>
         ) : null}
@@ -121,7 +121,7 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
         {label && (
           <label
             htmlFor={textareaId}
-            className="text-xs font-medium tracking-wide text-zinc-300"
+            className="text-xs font-medium tracking-wide text-[var(--text-secondary)]"
           >
             {label}
           </label>
@@ -131,17 +131,17 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
           id={textareaId}
           aria-invalid={Boolean(error)}
           className={cn(
-            "min-h-[84px] w-full rounded-xl border bg-[var(--bg-surface)] px-3.5 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-zinc-600 transition-colors resize-y",
+            "min-h-[84px] w-full rounded-[12px] border bg-[var(--bg-surface)] px-3.5 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] transition-colors resize-y",
             "border-[var(--border-subtle)] hover:border-[var(--border-strong)] focus:border-[var(--border-active)] focus:outline-none",
-            error ? "border-red-500/60 focus:border-red-400" : "",
+            error ? "border-[var(--danger)]/70 focus:border-[var(--danger)]" : "",
             className
           )}
           {...props}
         />
         {error ? (
-          <p className="text-xs text-red-400">{error}</p>
+          <p className="text-xs text-[var(--danger)]">{error}</p>
         ) : hint ? (
-          <p className="text-xs text-zinc-500">{hint}</p>
+          <p className="text-xs text-[var(--text-muted)]">{hint}</p>
         ) : null}
       </div>
     );
